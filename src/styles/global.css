@@ -1,0 +1,109 @@
+/* Global Design System & Layout - Sashframe MVP */
+
+:root {
+  /* Color Palette - Warm Walnut & Natural Tones */
+  --bg-app: #F4F1EA;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #FAF8F5;
+  --bg-surface-alt: #EFECE6;
+  
+  --text-main: #2A2421;
+  --text-muted: #736962;
+  --text-light: #9E948C;
+
+  --border-subtle: #E6E0D7;
+  --border-strong: #D5CCC0;
+  
+  /* Accent Tones */
+  --accent-walnut: #4A3A31;
+  --accent-walnut-hover: #372A23;
+  --accent-warm-highlight: #EAE3D7;
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Touch Spacing & Radius */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-subtle: 0 4px 16px rgba(42, 36, 33, 0.04);
+  --shadow-medium: 0 8px 24px rgba(42, 36, 33, 0.08);
+  --shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.22);
+
+  /* Touch targets minimum size */
+  --min-touch-target: 48px;
+}
+
+/* Reset & Box Sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none; /* Ideal for kiosk touchscreen display */
+}
+
+/* Base App Shell Layout (1920x1080 & responsive to 1280x800) */
+#app-root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+/* Button & Interactive Reset */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Scrollbar styling for touch scrollable areas */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}

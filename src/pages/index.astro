@@ -1,11 +1,20 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import '../styles/global.css';
+import DashboardApp from '../components/DashboardApp.svelte';
 ---
 
-<Layout>
-	<Welcome />
-</Layout>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Custom household calendar display for Alex & Sham running on touchscreen kiosk." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Sashframe</title>
+  </head>
+  <body>
+    <div id="app-root">
+      <DashboardApp client:load />
+    </div>
+  </body>
+</html>
