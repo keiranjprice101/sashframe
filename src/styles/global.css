@@ -1,25 +1,40 @@
 /* Global Design System & Layout - Sashframe MVP */
 
 :root {
+  color-scheme: light;
+
   /* Color Palette - Warm Walnut & Natural Tones */
-  --bg-app: #F4F1EA;
-  --bg-surface: #FFFFFF;
-  --bg-surface-elevated: #FAF8F5;
-  --bg-surface-alt: #EFECE6;
+  --bg-app: #F4F0E8;
+  --bg-surface: #FAF8F5;
+  --bg-surface-elevated: #F5F1E9;
+  --bg-surface-alt: #EFE9DF;
   
   --text-main: #2A2421;
-  --text-muted: #736962;
-  --text-light: #9E948C;
+  --text-muted: #786E66;
+  --text-light: #9E9388;
 
-  --border-subtle: #E6E0D7;
+  --border-subtle: #E8E2D8;
+  --border-hairline: rgba(74, 58, 49, 0.045);
   --border-strong: #D5CCC0;
   
   /* Accent Tones */
   --accent-walnut: #4A3A31;
   --accent-walnut-hover: #372A23;
+  --accent-walnut-text: #FAF8F5;
   --accent-warm-highlight: #EAE3D7;
 
-  /* Typography */
+  /* Household Member Colors */
+  --member-alex: #D96B52;
+  --member-sham: #3B7A66;
+
+  /* Controls & Overlays */
+  --control-hover: rgba(74, 58, 49, 0.05);
+  --modal-backdrop: rgba(42, 36, 33, 0.45);
+  --danger-text: #A34839;
+  --danger-bg: #FDF2F0;
+  --danger-border: #F5C6BA;
+
+  /* Typography - System Fonts Only */
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
   /* Touch Spacing & Radius */
@@ -35,6 +50,46 @@
 
   /* Touch targets minimum size */
   --min-touch-target: 48px;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Color Palette - Dark Warm Walnut & Deep Charcoal Tones */
+  --bg-app: #181412;
+  --bg-surface: #1E1A17;
+  --bg-surface-elevated: #26211D;
+  --bg-surface-alt: #2E2824;
+
+  --text-main: #EAE4DC;
+  --text-muted: #A89D93;
+  --text-light: #7E746A;
+
+  --border-subtle: #2E2824;
+  --border-hairline: rgba(255, 255, 255, 0.06);
+  --border-strong: #423A34;
+
+  /* Accent Tones (softer/warmer walnut amber on dark background) */
+  --accent-walnut: #C49A78;
+  --accent-walnut-hover: #D4AB8A;
+  --accent-walnut-text: #1A1614;
+  --accent-warm-highlight: #332B25;
+
+  /* Household Member Colors (slightly lifted for dark-background contrast) */
+  --member-alex: #E27962;
+  --member-sham: #4E9B83;
+
+  /* Controls & Overlays */
+  --control-hover: rgba(255, 255, 255, 0.06);
+  --modal-backdrop: rgba(10, 8, 7, 0.7);
+  --danger-text: #E57368;
+  --danger-bg: #351F1C;
+  --danger-border: #4D2B26;
+
+  /* Shadows */
+  --shadow-subtle: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-medium: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.7);
 }
 
 /* Reset & Box Sizing */
@@ -55,6 +110,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none; /* Ideal for kiosk touchscreen display */
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Base App Shell Layout (1920x1080 & responsive to 1280x800) */

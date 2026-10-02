@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import PhotoPanel from './PhotoPanel.svelte';
   import DateNavigation from './DateNavigation.svelte';
   import CalendarWeek from './CalendarWeek.svelte';
@@ -13,6 +14,25 @@
   let events = $state<CalendarEvent[]>(getInitialMockEvents());
   let selectedEvent = $state<CalendarEvent | null>(null);
   let isAddModalOpen = $state(false);
+  let theme = $state<'light' | 'dark'>('light');
+
+  onMount(() => {
+    try {
+      const saved = localStorage.getItem('sashframe-theme');
+      if (saved === 'dark' || saved === 'light') {
+        theme = saved;
+      }
+    } catch (e) {}
+    document.documentElement.setAttribute('data-theme', theme);
+  });
+
+  function handleToggleTheme() {
+    theme = theme === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem('sashframe-theme', theme);
+    } catch (e) {}
+    document.documentElement.setAttribute('data-theme', theme);
+  }
 
   function handlePrevWeek() {
     currentWeekStart = addWeeks(currentWeekStart, -1);
@@ -64,10 +84,12 @@
   <div class="calendar-panel">
     <DateNavigation 
       {currentWeekStart}
+      {theme}
       onPrevWeek={handlePrevWeek}
       onNextWeek={handleNextWeek}
       onToday={handleToday}
       onAddEvent={handleOpenAddModal}
+      onToggleTheme={handleToggleTheme}
     />
 
     <div class="week-view-container">

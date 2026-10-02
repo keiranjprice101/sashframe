@@ -1,163 +1,208 @@
 <script lang="ts">
-  import { formatDayShort, addDays } from '../lib/dates';
+  import { addDays, formatWeekRange } from '../lib/dates';
 
   interface Props {
     currentWeekStart: Date;
+    theme?: 'light' | 'dark';
     onPrevWeek: () => void;
     onNextWeek: () => void;
     onToday: () => void;
     onAddEvent: () => void;
+    onToggleTheme?: () => void;
   }
 
-  let { currentWeekStart, onPrevWeek, onNextWeek, onToday, onAddEvent }: Props = $props();
+  let { 
+    currentWeekStart, 
+    theme = 'light',
+    onPrevWeek, 
+    onNextWeek, 
+    onToday, 
+    onAddEvent,
+    onToggleTheme
+  }: Props = $props();
 
   let weekEnd = $derived(addDays(currentWeekStart, 6));
-
-  let formattedRange = $derived.by(() => {
-    const startStr = `${formatDayShort(currentWeekStart)}, ${currentWeekStart.toLocaleString('en-US', { month: 'short', day: 'numeric' })}`;
-    const endStr = `${formatDayShort(weekEnd)}, ${weekEnd.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-    return `${startStr} – ${endStr}`;
-  });
+  let formattedRange = $derived(formatWeekRange(currentWeekStart, weekEnd));
 </script>
 
-<div class="nav-bar">
-  <div class="week-title-container">
-    <h2 class="week-range-text">{formattedRange}</h2>
-  </div>
+<header class="calendar-header">
+  <div class="masthead-row">
+    <h2 class="week-heading">{formattedRange}</h2>
 
-  <div class="controls-container">
-    <div class="nav-group">
+    <div class="masthead-controls">
+      <nav class="nav-cluster" aria-label="Week navigation">
+        <button 
+          type="button" 
+          class="masthead-btn nav-arrow" 
+          onclick={onPrevWeek} 
+          aria-label="Previous week"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+
+        <button 
+          type="button" 
+          class="masthead-btn today-btn" 
+          onclick={onToday}
+        >
+          Today
+        </button>
+
+        <button 
+          type="button" 
+          class="masthead-btn nav-arrow" 
+          onclick={onNextWeek} 
+          aria-label="Next week"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </nav>
+
+      <span class="control-divider" aria-hidden="true"></span>
+
       <button 
         type="button" 
-        class="touch-btn nav-arrow" 
-        onclick={onPrevWeek} 
-        aria-label="Previous Week"
+        class="masthead-btn add-btn" 
+        onclick={onAddEvent}
+        aria-label="Add event"
+        title="Add event"
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
       </button>
 
-      <button 
-        type="button" 
-        class="touch-btn today-btn" 
-        onclick={onToday}
-      >
-        Today
-      </button>
+      {#if onToggleTheme}
+        <span class="control-divider" aria-hidden="true"></span>
 
-      <button 
-        type="button" 
-        class="touch-btn nav-arrow" 
-        onclick={onNextWeek} 
-        aria-label="Next Week"
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </button>
+        <button 
+          type="button" 
+          class="masthead-btn theme-toggle-btn" 
+          onclick={onToggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {#if theme === 'dark'}
+            <!-- Sun icon when dark mode is active -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2"></path>
+              <path d="M12 20v2"></path>
+              <path d="m4.93 4.93 1.41 1.41"></path>
+              <path d="m17.66 17.66 1.41 1.41"></path>
+              <path d="M2 12h2"></path>
+              <path d="M20 12h2"></path>
+              <path d="m6.34 17.66-1.41 1.41"></path>
+              <path d="m19.07 4.93-1.41 1.41"></path>
+            </svg>
+          {:else}
+            <!-- Moon icon when light mode is active -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+            </svg>
+          {/if}
+        </button>
+      {/if}
     </div>
-
-    <button 
-      type="button" 
-      class="touch-btn add-event-btn" 
-      onclick={onAddEvent}
-      aria-label="Add New Event"
-    >
-      <span class="plus-icon">+</span>
-      <span class="btn-text">Add Event</span>
-    </button>
   </div>
-</div>
+</header>
 
 <style>
-  .nav-bar {
+  .calendar-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.25rem 1.75rem;
-    background-color: var(--bg-surface-elevated);
-    border-bottom: 1px solid var(--border-subtle);
+    flex-direction: column;
+    padding: 1.5rem 1.75rem 1.25rem 1.75rem;
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-hairline);
     flex-shrink: 0;
   }
 
-  .week-range-text {
-    font-size: 1.45rem;
-    font-weight: 700;
+  .masthead-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .week-heading {
+    font-size: 1.65rem;
+    font-weight: 500;
     color: var(--text-main);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin: 0;
   }
 
-  .controls-container {
+  .masthead-controls {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 0.75rem;
   }
 
-  .nav-group {
-    display: flex;
+  .nav-cluster {
+    display: inline-flex;
     align-items: center;
-    background-color: var(--bg-surface-alt);
-    padding: 4px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle);
+    gap: 0.2rem;
   }
 
-  .touch-btn {
-    min-height: var(--min-touch-target);
-    min-width: var(--min-touch-target);
-    padding: 0 1rem;
+  .masthead-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 0.5rem;
     border-radius: var(--radius-sm);
-    font-weight: 600;
-    font-size: 1rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .masthead-btn:hover {
     color: var(--text-main);
-    transition: background-color 0.15s ease, transform 0.1s ease;
+    background-color: var(--control-hover);
   }
 
-  .nav-arrow {
-    padding: 0 0.85rem;
-    color: var(--accent-walnut);
+  .masthead-btn:focus-visible {
+    outline: 2px solid var(--accent-walnut);
+    outline-offset: 2px;
   }
 
-  .nav-arrow:active, .today-btn:active {
-    background-color: var(--border-strong);
+  .masthead-btn:active {
+    background-color: var(--control-hover);
+    color: var(--text-main);
+    transform: scale(0.96);
   }
 
   .today-btn {
-    padding: 0 1.2rem;
+    padding: 0 0.85rem;
     font-size: 0.95rem;
-    border-left: 1px solid var(--border-subtle);
-    border-right: 1px solid var(--border-subtle);
-    border-radius: 0;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.01em;
   }
 
-  .add-event-btn {
-    background-color: var(--accent-walnut);
-    color: #FFFFFF;
-    padding: 0 1.4rem;
-    border-radius: var(--radius-md);
-    gap: 0.5rem;
-    font-size: 1.05rem;
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(74, 58, 49, 0.2);
+  .control-divider {
+    width: 1px;
+    height: 18px;
+    background-color: var(--border-hairline);
+    opacity: 0.75;
   }
 
-  .add-event-btn:active {
-    background-color: var(--accent-walnut-hover);
-  }
-
-  .plus-icon {
-    font-size: 1.4rem;
-    line-height: 1;
-    font-weight: 400;
+  .add-btn {
+    color: var(--text-muted);
   }
 
   @media (max-width: 1366px) {
-    .nav-bar {
-      padding: 1rem 1.25rem;
+    .calendar-header {
+      padding: 1.15rem 1.25rem 1rem 1.25rem;
     }
-    .week-range-text {
-      font-size: 1.25rem;
+    .week-heading {
+      font-size: 1.4rem;
     }
   }
 </style>

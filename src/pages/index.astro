@@ -8,9 +8,16 @@ import DashboardApp from '../components/DashboardApp.svelte';
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="description" content="Custom household calendar display for Alex & Sham running on touchscreen kiosk." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Sashframe</title>
+    <script is:inline>
+      (function() {
+        try {
+          var saved = localStorage.getItem('sashframe-theme') || 'light';
+          document.documentElement.setAttribute('data-theme', saved);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app-root">

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CalendarEvent, HouseholdMember } from '../lib/types';
-  import { formatDisplayDate, formatTime12h } from '../lib/dates';
+  import { formatDisplayDate } from '../lib/dates';
   import { HOUSEHOLD_MEMBERS } from '../data/mock';
 
   interface Props {
@@ -61,16 +61,20 @@
     >
       <!-- Header -->
       <div class="modal-header">
-        <div class="member-tag" style="background-color: {member.color};">
-          {member.name}
+        <div class="member-indicator">
+          <span class="member-dot" style="background-color: var(--member-{event.memberId}, {member.color});"></span>
+          <span class="member-name">{member.name}</span>
         </div>
         <button 
           type="button" 
-          class="close-btn touch-target" 
+          class="close-btn" 
           onclick={onClose}
           aria-label="Close modal"
         >
-          ✕
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
         </button>
       </div>
 
@@ -78,35 +82,34 @@
       <div class="modal-body">
         <h3 id="modal-title" class="event-title">{event.title}</h3>
 
-        <div class="detail-row">
-          <span class="icon">📅</span>
-          <span class="detail-text">{formattedDate}</span>
-        </div>
-
-        <div class="detail-row">
-          <span class="icon">⏰</span>
-          <span class="detail-text">
-            {#if event.isAllDay}
-              All-Day Event
-            {:else}
-              {formatTime12h(event.startTime)}
-              {#if event.endTime}
-                – {formatTime12h(event.endTime)}
-              {/if}
-            {/if}
-          </span>
-        </div>
-
-        {#if event.location}
-          <div class="detail-row">
-            <span class="icon">📍</span>
-            <span class="detail-text">{event.location}</span>
+        <div class="meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Date</span>
+            <span class="meta-value">{formattedDate}</span>
           </div>
-        {/if}
+
+          <div class="meta-item">
+            <span class="meta-label">Time</span>
+            <span class="meta-value">
+              {#if event.isAllDay}
+                All Day
+              {:else}
+                {event.startTime}{event.endTime ? ` – ${event.endTime}` : ''}
+              {/if}
+            </span>
+          </div>
+
+          {#if event.location}
+            <div class="meta-item">
+              <span class="meta-label">Location</span>
+              <span class="meta-value">{event.location}</span>
+            </div>
+          {/if}
+        </div>
 
         {#if event.description}
-          <div class="notes-box">
-            <div class="notes-label">Notes & Details</div>
+          <div class="notes-section">
+            <div class="notes-label">Notes</div>
             <div class="notes-text">{event.description}</div>
           </div>
         {/if}
@@ -122,27 +125,29 @@
       <div class="modal-footer">
         <button 
           type="button" 
-          class="action-btn delete-btn" 
+          class="btn-delete" 
           onclick={handleDelete}
         >
-          🗑️ Delete
+          Delete
         </button>
 
-        <button 
-          type="button" 
-          class="action-btn edit-btn" 
-          onclick={handleEdit}
-        >
-          ✏️ Edit
-        </button>
+        <div class="right-actions">
+          <button 
+            type="button" 
+            class="btn-secondary" 
+            onclick={handleEdit}
+          >
+            Edit
+          </button>
 
-        <button 
-          type="button" 
-          class="action-btn close-action-btn" 
-          onclick={onClose}
-        >
-          Close
-        </button>
+          <button 
+            type="button" 
+            class="btn-primary" 
+            onclick={onClose}
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -153,7 +158,7 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background-color: rgba(20, 16, 14, 0.65);
+    background-color: var(--modal-backdrop);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -164,7 +169,7 @@
   .modal-container {
     background-color: var(--bg-surface);
     width: 100%;
-    max-width: 520px;
+    max-width: 480px;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-modal);
     border: 1px solid var(--border-subtle);
@@ -177,88 +182,120 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.25rem 1.5rem;
-    background-color: var(--bg-surface-elevated);
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 1.25rem 1.5rem 0.85rem 1.5rem;
+    border-bottom: 1px solid var(--border-hairline);
   }
 
-  .member-tag {
-    color: #FFFFFF;
-    font-size: 0.9rem;
-    font-weight: 700;
-    padding: 0.35rem 1rem;
-    border-radius: var(--radius-full);
+  .member-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .member-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .member-name {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-muted);
     letter-spacing: 0.02em;
   }
 
   .close-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius-full);
-    font-size: 1.2rem;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
+    background: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .close-btn:hover {
+    background-color: var(--control-hover);
+    color: var(--text-main);
   }
 
   .close-btn:active {
-    background-color: var(--border-subtle);
+    background-color: var(--control-hover);
+    color: var(--text-main);
   }
 
   .modal-body {
-    padding: 1.75rem 1.5rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.25rem;
   }
 
   .event-title {
-    font-size: 1.65rem;
-    font-weight: 700;
+    font-size: 1.45rem;
+    font-weight: 500;
     color: var(--text-main);
-    line-height: 1.25;
-    margin-bottom: 0.5rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
   }
 
-  .detail-row {
+  .meta-grid {
     display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    font-size: 1.1rem;
+    flex-direction: column;
+    gap: 0.75rem;
+    border-top: 1px solid var(--border-hairline);
+    padding-top: 1rem;
+  }
+
+  .meta-item {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+
+  .meta-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .meta-value {
+    font-size: 0.95rem;
     color: var(--text-main);
+    line-height: 1.35;
   }
 
-  .icon {
-    font-size: 1.25rem;
-  }
-
-  .notes-box {
-    margin-top: 0.5rem;
-    padding: 1rem;
-    background-color: var(--bg-surface-alt);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle);
+  .notes-section {
+    padding: 0.85rem 1rem;
+    background-color: var(--bg-surface-elevated);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-hairline);
   }
 
   .notes-label {
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-size: 0.75rem;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
     margin-bottom: 0.3rem;
   }
 
   .notes-text {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     color: var(--text-main);
     line-height: 1.4;
   }
 
   .toast-notification {
-    padding: 0.75rem 1rem;
+    padding: 0.65rem 0.85rem;
     background-color: var(--accent-warm-highlight);
     color: var(--accent-walnut);
-    font-weight: 600;
-    font-size: 0.95rem;
+    font-weight: 500;
+    font-size: 0.9rem;
     border-radius: var(--radius-sm);
     text-align: center;
   }
@@ -266,47 +303,74 @@
   .modal-footer {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    padding: 1.25rem 1.5rem;
+    justify-content: space-between;
+    padding: 1.15rem 1.5rem;
+    border-top: 1px solid var(--border-hairline);
     background-color: var(--bg-surface-elevated);
-    border-top: 1px solid var(--border-subtle);
   }
 
-  .action-btn {
-    min-height: 48px;
-    padding: 0 1.25rem;
-    border-radius: var(--radius-md);
-    font-weight: 600;
-    font-size: 1rem;
+  .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
   }
 
-  .delete-btn {
-    margin-right: auto;
-    background-color: #FEE2E2;
-    color: #991B1B;
+  .btn-delete {
+    min-height: 44px;
+    padding: 0 0.85rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--danger-text);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
 
-  .delete-btn:active {
-    background-color: #FCA5A5;
+  .btn-delete:hover {
+    background-color: var(--danger-bg);
   }
 
-  .edit-btn {
-    background-color: var(--bg-surface-alt);
+  .btn-delete:active {
+    background-color: var(--danger-bg);
+  }
+
+  .btn-secondary {
+    min-height: 44px;
+    padding: 0 1.15rem;
+    font-size: 0.92rem;
+    font-weight: 500;
     color: var(--text-main);
     border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-surface);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
   }
 
-  .edit-btn:active {
+  .btn-secondary:hover {
+    background-color: var(--bg-surface-elevated);
+    border-color: var(--border-strong);
+  }
+
+  .btn-secondary:active {
     background-color: var(--border-subtle);
   }
 
-  .close-action-btn {
+  .btn-primary {
+    min-height: 44px;
+    padding: 0 1.35rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--accent-walnut-text);
     background-color: var(--accent-walnut);
-    color: #FFFFFF;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.15s ease;
   }
 
-  .close-action-btn:active {
+  .btn-primary:hover {
+    background-color: var(--accent-walnut-hover);
+  }
+
+  .btn-primary:active {
     background-color: var(--accent-walnut-hover);
   }
 </style>

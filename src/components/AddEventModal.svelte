@@ -85,8 +85,18 @@
       aria-labelledby="add-modal-title"
     >
       <div class="modal-header">
-        <h3 id="add-modal-title" class="header-title">Add New Event</h3>
-        <button type="button" class="close-btn" onclick={onClose} aria-label="Close">✕</button>
+        <h3 id="add-modal-title" class="header-title">New Event</h3>
+        <button 
+          type="button" 
+          class="close-btn" 
+          onclick={onClose} 
+          aria-label="Close"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
       <form class="modal-form" onsubmit={handleSubmit}>
@@ -95,46 +105,46 @@
             <div class="error-banner">{errorMsg}</div>
           {/if}
 
-          <!-- Title Input -->
+          <!-- Member Selector (Subtle dots) -->
           <div class="form-group">
-            <label for="event-title">Event Title</label>
-            <input 
-              id="event-title"
-              type="text" 
-              class="input-touch" 
-              placeholder="e.g. Work Meeting, Dinner, Dentist..." 
-              bind:value={title}
-              required
-            />
-          </div>
-
-          <!-- Member Selector (Pill options) -->
-          <div class="form-group">
-            <label for="member-select">For Household Member</label>
-            <div id="member-select" class="member-selector">
+            <span class="field-label">Calendar</span>
+            <div class="member-selector">
               {#each Object.values(members) as m (m.id)}
                 <button 
                   type="button"
                   class="member-pill"
                   class:selected={memberId === m.id}
-                  style="--m-color: {m.color}; --m-bg: {m.bgColor}"
+                  style="--m-color: var(--member-{m.id}, {m.color});"
                   onclick={() => memberId = m.id}
                 >
-                  <span class="pill-dot" style="background-color: {m.color}"></span>
-                  {m.name}
+                  <span class="pill-dot" style="background-color: var(--member-{m.id}, {m.color});"></span>
+                  <span class="pill-name">{m.name}</span>
                 </button>
               {/each}
             </div>
           </div>
 
+          <!-- Title Input -->
+          <div class="form-group">
+            <label for="event-title" class="field-label">Title</label>
+            <input 
+              id="event-title"
+              type="text" 
+              class="input-touch" 
+              placeholder="Event name" 
+              bind:value={title}
+              required
+            />
+          </div>
+
           <!-- Date & All-Day Toggle -->
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="event-date">Date</label>
+              <label for="event-date" class="field-label">Date</label>
               <input 
                 id="event-date"
                 type="date" 
-                class="input-touch"
+                class="input-touch" 
                 bind:value={date}
                 required
               />
@@ -148,7 +158,7 @@
                   class="checkbox-touch"
                   bind:checked={isAllDay}
                 />
-                <span>All Day Event</span>
+                <span>All Day</span>
               </label>
             </div>
           </div>
@@ -157,21 +167,21 @@
           {#if !isAllDay}
             <div class="form-row">
               <div class="form-group flex-1">
-                <label for="start-time">Start Time</label>
+                <label for="start-time" class="field-label">Start</label>
                 <input 
                   id="start-time"
                   type="time" 
-                  class="input-touch"
+                  class="input-touch" 
                   bind:value={startTime}
                 />
               </div>
 
               <div class="form-group flex-1">
-                <label for="end-time">End Time</label>
+                <label for="end-time" class="field-label">End</label>
                 <input 
                   id="end-time"
                   type="time" 
-                  class="input-touch"
+                  class="input-touch" 
                   bind:value={endTime}
                 />
               </div>
@@ -180,24 +190,24 @@
 
           <!-- Location -->
           <div class="form-group">
-            <label for="event-location">Location (Optional)</label>
+            <label for="event-location" class="field-label">Location</label>
             <input 
               id="event-location"
               type="text" 
-              class="input-touch"
-              placeholder="e.g. Kitchen, Downtown, Remote"
+              class="input-touch" 
+              placeholder="e.g. Studio, Home, Downtown (optional)" 
               bind:value={location}
             />
           </div>
 
           <!-- Notes -->
           <div class="form-group">
-            <label for="event-description">Notes & Details (Optional)</label>
+            <label for="event-description" class="field-label">Notes</label>
             <textarea 
               id="event-description"
-              class="input-touch textarea-touch"
+              class="input-touch textarea-touch" 
               rows="2"
-              placeholder="Add additional details..."
+              placeholder="Additional details (optional)" 
               bind:value={description}
             ></textarea>
           </div>
@@ -208,7 +218,7 @@
             Cancel
           </button>
           <button type="submit" class="btn-primary">
-            Save Event
+            Save
           </button>
         </div>
       </form>
@@ -221,7 +231,7 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background-color: rgba(20, 16, 14, 0.65);
+    background-color: var(--modal-backdrop);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -232,7 +242,7 @@
   .modal-container {
     background-color: var(--bg-surface);
     width: 100%;
-    max-width: 560px;
+    max-width: 500px;
     max-height: 90vh;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-modal);
@@ -246,23 +256,34 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.25rem 1.5rem;
-    background-color: var(--bg-surface-elevated);
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 1.25rem 1.5rem 0.85rem 1.5rem;
+    border-bottom: 1px solid var(--border-hairline);
   }
 
   .header-title {
     font-size: 1.35rem;
-    font-weight: 700;
+    font-weight: 500;
     color: var(--text-main);
+    letter-spacing: -0.01em;
   }
 
   .close-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius-full);
-    font-size: 1.2rem;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
+    background: transparent;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .close-btn:hover {
+    background-color: var(--control-hover);
+    color: var(--text-main);
+  }
+
+  .close-btn:active {
+    background-color: var(--control-hover);
+    color: var(--text-main);
   }
 
   .modal-form {
@@ -275,28 +296,31 @@
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 1.2rem;
+    gap: 1.1rem;
   }
 
   .error-banner {
-    padding: 0.75rem 1rem;
-    background-color: #FEE2E2;
-    color: #991B1B;
+    padding: 0.65rem 0.85rem;
+    background-color: var(--danger-bg);
+    color: var(--danger-text);
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    font-weight: 600;
+    font-size: 0.88rem;
+    font-weight: 500;
+    border: 1px solid var(--danger-border);
   }
 
   .form-group {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
 
-  .form-group label {
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: var(--text-main);
+  .field-label {
+    font-size: 0.76rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
   }
 
   .form-row {
@@ -311,73 +335,76 @@
 
   .input-touch {
     width: 100%;
-    min-height: 48px;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
+    min-height: 46px;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.96rem;
     font-family: inherit;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
     background-color: var(--bg-surface-elevated);
     color: var(--text-main);
     outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .input-touch:focus {
     border-color: var(--accent-walnut);
-    box-shadow: 0 0 0 3px rgba(74, 58, 49, 0.15);
+    box-shadow: 0 0 0 2px var(--control-hover);
   }
 
   .textarea-touch {
-    min-height: 72px;
+    min-height: 68px;
     resize: vertical;
   }
 
   .member-selector {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.65rem;
   }
 
   .member-pill {
     flex: 1;
-    min-height: 48px;
-    border-radius: var(--radius-md);
-    border: 2px solid var(--border-subtle);
-    background-color: var(--bg-surface-alt);
-    color: var(--text-main);
-    font-size: 1rem;
-    font-weight: 600;
+    min-height: 44px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    background-color: var(--bg-surface-elevated);
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    font-weight: 500;
     gap: 0.5rem;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
   }
 
   .member-pill.selected {
     border-color: var(--m-color);
-    background-color: var(--m-bg);
+    background-color: var(--bg-surface);
     color: var(--text-main);
   }
 
   .pill-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: var(--radius-full);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
   }
 
   .checkbox-group {
     justify-content: center;
-    padding-bottom: 0.5rem;
+    padding-bottom: 0.35rem;
   }
 
   .checkbox-label {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.5rem;
     cursor: pointer;
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--text-main);
   }
 
   .checkbox-touch {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     accent-color: var(--accent-walnut);
   }
 
@@ -386,30 +413,45 @@
     align-items: center;
     justify-content: flex-end;
     gap: 0.75rem;
-    padding: 1.25rem 1.5rem;
+    padding: 1.15rem 1.5rem;
     background-color: var(--bg-surface-elevated);
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--border-hairline);
   }
 
   .btn-secondary {
-    min-height: 48px;
-    padding: 0 1.25rem;
-    border-radius: var(--radius-md);
-    background-color: var(--bg-surface-alt);
+    min-height: 44px;
+    padding: 0 1.15rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-surface);
     border: 1px solid var(--border-subtle);
-    font-weight: 600;
-    font-size: 1rem;
+    font-weight: 500;
+    font-size: 0.92rem;
     color: var(--text-main);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--bg-surface-elevated);
+    border-color: var(--border-strong);
+  }
+
+  .btn-secondary:active {
+    background-color: var(--border-subtle);
   }
 
   .btn-primary {
-    min-height: 48px;
-    padding: 0 1.5rem;
-    border-radius: var(--radius-md);
+    min-height: 44px;
+    padding: 0 1.35rem;
+    border-radius: var(--radius-sm);
     background-color: var(--accent-walnut);
-    color: #FFFFFF;
-    font-weight: 600;
-    font-size: 1rem;
+    color: var(--accent-walnut-text);
+    font-weight: 500;
+    font-size: 0.92rem;
+    transition: background-color 0.15s ease;
+  }
+
+  .btn-primary:hover {
+    background-color: var(--accent-walnut-hover);
   }
 
   .btn-primary:active {
