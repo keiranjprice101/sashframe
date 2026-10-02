@@ -28,28 +28,35 @@ export function formatDateIso(date: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function formatDisplayDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'long',
+export function formatDisplayDate(date: Date, timeZone: string = 'Europe/London'): string {
+  return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
-    year: 'numeric'
+    month: 'long',
+    year: 'numeric',
+    timeZone
   }).format(date);
 }
 
-export function formatDayName(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date);
+export function formatDayName(date: Date, timeZone: string = 'Europe/London'): string {
+  return new Intl.DateTimeFormat('en-GB', { 
+    weekday: 'long',
+    timeZone
+  }).format(date);
 }
 
-export function formatDayShort(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date);
+export function formatDayShort(date: Date, timeZone: string = 'Europe/London'): string {
+  return new Intl.DateTimeFormat('en-GB', { 
+    weekday: 'short',
+    timeZone
+  }).format(date);
 }
 
-export function formatLiveTime(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
+export function formatLiveTime(date: Date, timeZone: string = 'Europe/London'): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
     minute: '2-digit',
-    hour12: true
+    hour12: false,
+    timeZone
   }).format(date);
 }
 
@@ -83,4 +90,20 @@ export function addDays(date: Date, days: number): Date {
 
 export function addWeeks(date: Date, weeks: number): Date {
   return addDays(date, weeks * 7);
+}
+
+export function formatWeekRange(start: Date, end: Date): string {
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const sameMonth = sameYear && start.getMonth() === end.getMonth();
+
+  const startMonth = start.toLocaleDateString('en-US', { month: 'long' });
+  const endMonth = end.toLocaleDateString('en-US', { month: 'long' });
+
+  if (sameMonth) {
+    return `${startMonth} ${start.getDate()} – ${end.getDate()}`;
+  } else if (sameYear) {
+    return `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}`;
+  } else {
+    return `${startMonth} ${start.getDate()}, ${start.getFullYear()} – ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
+  }
 }

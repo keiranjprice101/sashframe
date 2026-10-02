@@ -63,12 +63,42 @@
 
   <!-- Dark gradient scrim for legibility -->
   <div class="gradient-scrim"></div>
+  <div class="radial-scrim"></div>
 
-  <!-- Unobtrusive elegant overlay -->
+  <!-- Integrated typographic overlay directly on image -->
   <div class="overlay-content">
     <div class="top-meta">
-      <div class="weather-badge">
-        <span class="weather-icon">☁️</span>
+      <div class="weather-display">
+        <span class="weather-icon" aria-hidden="true">
+          {#if weather.condition.toLowerCase().includes('cloud')}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+            </svg>
+          {:else if weather.condition.toLowerCase().includes('rain')}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+              <path d="M16 14v6" />
+              <path d="M8 14v6" />
+              <path d="M12 16v6" />
+            </svg>
+          {:else if weather.condition.toLowerCase().includes('clear') || weather.condition.toLowerCase().includes('sun')}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="m4.93 4.93 1.41 1.41" />
+              <path d="m17.66 17.66 1.41 1.41" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+              <path d="m6.34 17.66-1.41 1.41" />
+              <path d="m19.07 4.93-1.41 1.41" />
+            </svg>
+          {:else}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+            </svg>
+          {/if}
+        </span>
         <span class="weather-temp">{weather.temperature}{weather.unit}</span>
         <span class="weather-dot">·</span>
         <span class="weather-cond">{weather.condition}</span>
@@ -77,14 +107,10 @@
 
     <div class="bottom-time-date">
       <div class="time-display">{formatLiveTime(now)}</div>
-      <div class="day-name">{formatDayName(now)}</div>
-      <div class="full-date">{formatDisplayDate(now)}</div>
-      
-      {#if photos[currentIndex]}
-        <div class="photo-caption">
-          📍 {photos[currentIndex].caption} {photos[currentIndex].location ? `— ${photos[currentIndex].location}` : ''}
-        </div>
-      {/if}
+      <div class="date-group">
+        <div class="day-name">{formatDayName(now)}</div>
+        <div class="full-date">{formatDisplayDate(now)}</div>
+      </div>
     </div>
   </div>
 </div>
@@ -123,10 +149,25 @@
     pointer-events: none;
     background: linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0.4) 0%,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(0, 0, 0, 0.15) 15%,
       transparent 30%,
-      transparent 50%,
-      rgba(0, 0, 0, 0.75) 100%
+      transparent 45%,
+      rgba(0, 0, 0, 0.45) 75%,
+      rgba(0, 0, 0, 0.78) 100%
+    );
+  }
+
+  .radial-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse 85% 65% at 0% 100%,
+      rgba(12, 10, 8, 0.65) 0%,
+      rgba(12, 10, 8, 0.32) 45%,
+      transparent 75%
     );
   }
 
@@ -138,83 +179,93 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 2.25rem 2.5rem;
+    padding: 2.75rem 3rem;
     color: #ffffff;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   }
 
-  .weather-badge {
+  .weather-display {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 1.15rem;
-    font-weight: 500;
+    gap: 0.55rem;
+    font-size: 1.1rem;
+    font-weight: 450;
     letter-spacing: 0.02em;
     color: rgba(255, 255, 255, 0.95);
-    background: rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(8px);
-    padding: 0.5rem 1.1rem;
-    border-radius: var(--radius-full);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 3px 12px rgba(0, 0, 0, 0.45);
   }
 
   .weather-icon {
-    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .weather-temp {
+    font-weight: 550;
   }
 
   .weather-dot {
-    opacity: 0.6;
+    opacity: 0.5;
+  }
+
+  .weather-cond {
+    font-weight: 350;
+    opacity: 0.9;
   }
 
   .bottom-time-date {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 4px 16px rgba(0, 0, 0, 0.5);
   }
 
   .time-display {
-    font-size: 3.75rem;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: -0.03em;
-    font-variant-numeric: tabular-nums;
+    font-size: 4.75rem;
+    font-weight: 350;
+    line-height: 0.92;
+    letter-spacing: -0.035em;
+    font-variant-numeric: normal;
+    color: #FFFFFF;
+  }
+
+  .date-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin-top: 0.85rem;
   }
 
   .day-name {
-    font-size: 2.2rem;
-    font-weight: 600;
-    line-height: 1.15;
-    margin-top: 0.4rem;
+    font-size: 1.95rem;
+    font-weight: 500;
+    line-height: 1.2;
     letter-spacing: -0.01em;
-    color: #F8F6F0;
+    color: #FAF8F5;
   }
 
   .full-date {
-    font-size: 1.25rem;
-    font-weight: 400;
-    opacity: 0.9;
+    font-size: 1.2rem;
+    font-weight: 350;
+    opacity: 0.88;
     letter-spacing: 0.01em;
-  }
-
-  .photo-caption {
-    margin-top: 1rem;
-    font-size: 0.9rem;
-    font-style: italic;
-    opacity: 0.75;
+    color: #FFFFFF;
   }
 
   @media (max-width: 1366px) {
     .photo-panel {
       width: 38%;
     }
+    .overlay-content {
+      padding: 2rem 2.25rem;
+    }
     .time-display {
-      font-size: 3.2rem;
+      font-size: 3.6rem;
     }
     .day-name {
-      font-size: 1.8rem;
+      font-size: 1.6rem;
     }
     .full-date {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
     }
   }
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CalendarEvent, HouseholdMember } from '../lib/types';
-  import { getWeekDays, formatDateIso, formatTime12h, isToday } from '../lib/dates';
+  import { getWeekDays, formatDateIso, isToday } from '../lib/dates';
   import { HOUSEHOLD_MEMBERS } from '../data/mock';
 
   interface Props {
@@ -39,15 +39,15 @@
     {@const todayClass = isToday(day)}
 
     <div class="day-column" class:is-today={todayClass}>
-      <!-- Day Header -->
+      <!-- Day Header: Unboxed, typographic, editorial -->
       <div class="day-header">
         <span class="day-name">{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
-        <div class="day-number-pill" class:active-today={todayClass}>
+        <div class="day-number" class:active-today={todayClass}>
           {day.getDate()}
         </div>
       </div>
 
-      <!-- Scrollable Day Content -->
+      <!-- Day Body: Generous breathing room, schedule typography -->
       <div class="day-body">
         <!-- All-Day Events Section -->
         {#if allDay.length > 0}
@@ -56,14 +56,18 @@
               {@const member = members[event.memberId] || members.alex}
               <button 
                 type="button" 
-                class="event-card all-day-card"
-                style="--member-color: {member.color}; --member-bg: {member.bgColor}; --member-border: {member.borderColor}; --member-text: {member.textColor}"
+                class="schedule-entry all-day-entry"
                 onclick={() => onSelectEvent(event)}
                 aria-label="{event.title}, All day event for {member.name}"
               >
-                <span class="all-day-tag">ALL DAY</span>
-                <span class="event-title">{event.title}</span>
-                <span class="member-badge">{member.initials}</span>
+                <span class="entry-time-label">All day</span>
+                <div class="entry-title-row">
+                  <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
+                  <span class="entry-title">{event.title}</span>
+                </div>
+                {#if event.location}
+                  <span class="entry-meta">{event.location}</span>
+                {/if}
               </button>
             {/each}
           </div>
@@ -75,32 +79,25 @@
             {@const member = members[event.memberId] || members.alex}
             <button 
               type="button" 
-              class="event-card timed-card"
-              style="--member-color: {member.color}; --member-bg: {member.bgColor}; --member-border: {member.borderColor}; --member-text: {member.textColor}"
+              class="schedule-entry timed-entry"
               onclick={() => onSelectEvent(event)}
-              aria-label="{event.title} at {formatTime12h(event.startTime)} for {member.name}"
+              aria-label="{event.title} at {event.startTime} for {member.name}"
             >
-              <div class="card-header">
-                <span class="event-time">
-                  {formatTime12h(event.startTime)}
-                  {#if event.endTime}
-                    – {formatTime12h(event.endTime)}
-                  {/if}
-                </span>
-                <span class="member-badge" style="background-color: {member.color}; color: #ffffff;">
-                  {member.initials}
-                </span>
+              <div class="entry-time-label">
+                {event.startTime}
+                {#if event.endTime}
+                  <span class="time-end">– {event.endTime}</span>
+                {/if}
               </div>
-              <div class="event-title">{event.title}</div>
+              <div class="entry-title-row">
+                <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
+                <span class="entry-title">{event.title}</span>
+              </div>
               {#if event.location}
-                <div class="event-location">📍 {event.location}</div>
+                <span class="entry-meta">{event.location}</span>
               {/if}
             </button>
           {/each}
-
-          {#if allDay.length === 0 && timed.length === 0}
-            <div class="empty-day-placeholder">No events</div>
-          {/if}
         </div>
       </div>
     </div>
@@ -113,8 +110,7 @@
     grid-template-columns: repeat(7, 1fr);
     height: 100%;
     width: 100%;
-    background-color: var(--border-subtle);
-    gap: 1px;
+    background-color: transparent;
     overflow: hidden;
   }
 
@@ -124,193 +120,190 @@
     background-color: var(--bg-surface);
     height: 100%;
     overflow: hidden;
+    padding: 0 0.75rem;
+    border-right: 1px solid var(--border-hairline);
   }
 
-  .day-column.is-today {
-    background-color: var(--bg-surface-elevated);
+  .day-column:last-child {
+    border-right: none;
   }
 
+  /* Day Header */
   .day-header {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 0.85rem 0.5rem;
-    background-color: var(--bg-surface-elevated);
-    border-bottom: 1px solid var(--border-subtle);
-    gap: 0.25rem;
+    align-items: flex-start;
+    padding: 1.25rem 0.25rem 0.85rem 0.25rem;
+    background: transparent;
+    border-bottom: 1px solid var(--border-hairline);
+    gap: 0.35rem;
   }
 
   .day-name {
-    font-size: 0.85rem;
-    font-weight: 700;
+    font-size: 0.76rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     color: var(--text-muted);
   }
 
-  .day-number-pill {
-    width: 2.3rem;
-    height: 2.3rem;
+  .day-number {
+    width: 2.25rem;
+    height: 2.25rem;
     border-radius: var(--radius-full);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.15rem;
-    font-weight: 700;
+    font-size: 1.75rem;
+    font-weight: 400;
     color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
   }
 
-  .day-number-pill.active-today {
+  .day-number.active-today {
     background-color: var(--accent-walnut);
-    color: #FFFFFF;
-    box-shadow: 0 2px 6px rgba(74, 58, 49, 0.3);
+    color: var(--accent-walnut-text);
+    font-size: 1.2rem;
+    font-weight: 500;
   }
 
+  /* Day Body & Events */
   .day-body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 0.6rem;
-    gap: 0.6rem;
+    padding: 1.25rem 0.25rem 1.5rem 0.25rem;
     overflow-y: auto;
   }
 
   .all-day-section {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px stroke var(--border-subtle);
+    gap: 1rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-hairline);
   }
 
   .timed-events-list {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 1.25rem;
   }
 
-  .event-card {
-    text-align: left;
+  /* Schedule Entry: Typeset schedule, not a card */
+  .schedule-entry {
     width: 100%;
-    padding: 0.75rem 0.85rem;
-    border-radius: var(--radius-md);
-    background-color: var(--member-bg);
-    border-left: 4px solid var(--member-color);
-    border-top: 1px solid var(--member-border);
-    border-right: 1px solid var(--member-border);
-    border-bottom: 1px solid var(--member-border);
-    box-shadow: var(--shadow-subtle);
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.3rem;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    gap: 0.2rem;
     cursor: pointer;
-    min-height: 56px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+    min-height: 48px; /* Touch-first accessibility */
   }
 
-  .event-card:active {
-    transform: scale(0.97);
-    box-shadow: none;
+  .schedule-entry:hover {
+    background-color: var(--control-hover);
   }
 
-  .all-day-card {
-    background-color: var(--member-color);
-    color: #FFFFFF;
-    border: none;
-    padding: 0.5rem 0.75rem;
-    position: relative;
+  .schedule-entry:focus-visible {
+    outline: 2px solid var(--accent-walnut);
+    outline-offset: 1px;
   }
 
-  .all-day-tag {
-    font-size: 0.65rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    opacity: 0.85;
+  .schedule-entry:active {
+    background-color: var(--control-hover);
+    transform: scale(0.99);
   }
 
-  .all-day-card .event-title {
-    color: #FFFFFF;
-    font-size: 0.95rem;
-    font-weight: 700;
-  }
-
-  .all-day-card .member-badge {
-    position: absolute;
-    top: 0.4rem;
-    right: 0.4rem;
-    background: rgba(255, 255, 255, 0.25);
-    color: #FFFFFF;
-  }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.4rem;
-  }
-
-  .event-time {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--member-text);
-  }
-
-  .member-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 0.15rem 0.4rem;
-    border-radius: var(--radius-full);
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .event-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-main);
-    line-height: 1.25;
-    word-break: break-word;
-  }
-
-  .event-location {
-    font-size: 0.75rem;
+  .entry-time-label {
+    font-size: 0.78rem;
+    font-weight: 500;
     color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    margin-bottom: 0.05rem;
   }
 
-  .empty-day-placeholder {
-    padding: 1.5rem 0.5rem;
-    text-align: center;
-    font-size: 0.8rem;
+  .time-end {
+    opacity: 0.85;
+    font-weight: 400;
+  }
+
+  .all-day-entry .entry-time-label {
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
     color: var(--text-light);
-    font-style: italic;
+  }
+
+  .entry-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .accent-bar {
+    width: 2px;
+    min-height: 1.15em;
+    align-self: stretch;
+    border-radius: 1px;
+    flex-shrink: 0;
+    opacity: 0.9;
+  }
+
+  .entry-title {
+    font-size: 0.98rem;
+    font-weight: 550;
+    color: var(--text-main);
+    line-height: 1.3;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+
+  .entry-meta {
+    padding-left: calc(2px + 0.55rem);
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--text-light);
+    line-height: 1.25;
+    overflow-wrap: break-word;
   }
 
   @media (max-width: 1366px) {
+    .day-column {
+      padding: 0 0.55rem;
+    }
     .day-header {
-      padding: 0.6rem 0.3rem;
+      padding: 1rem 0.25rem 0.75rem 0.25rem;
     }
     .day-name {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
     }
-    .day-number-pill {
-      width: 1.9rem;
-      height: 1.9rem;
-      font-size: 1rem;
+    .day-number {
+      font-size: 1.5rem;
+      width: 2rem;
+      height: 2rem;
     }
-    .event-card {
-      padding: 0.6rem 0.65rem;
+    .day-number.active-today {
+      font-size: 1.1rem;
     }
-    .event-title {
-      font-size: 0.85rem;
+    .entry-title {
+      font-size: 0.92rem;
     }
-    .event-time {
-      font-size: 0.75rem;
+    .entry-time-label {
+      font-size: 0.74rem;
+    }
+    .entry-meta {
+      font-size: 0.78rem;
     }
   }
 </style>

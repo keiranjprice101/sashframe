@@ -131,7 +131,7 @@ export function getInitialMockEvents(): CalendarEvent[] {
     },
     {
       id: 'event-7',
-      title: "Alex's Birthday 🎉",
+      title: "Alex's Birthday",
       memberId: 'alex',
       date: dayStr(3), // Thursday
       isAllDay: true,
