@@ -3,22 +3,18 @@
 
   interface Props {
     currentWeekStart: Date;
-    theme?: 'light' | 'dark';
     onPrevWeek: () => void;
     onNextWeek: () => void;
     onToday: () => void;
     onAddEvent: () => void;
-    onToggleTheme?: () => void;
   }
 
   let { 
     currentWeekStart, 
-    theme = 'light',
     onPrevWeek, 
     onNextWeek, 
     onToday, 
-    onAddEvent,
-    onToggleTheme
+    onAddEvent
   }: Props = $props();
 
   let weekEnd = $derived(addDays(currentWeekStart, 6));
@@ -76,38 +72,6 @@
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
       </button>
-
-      {#if onToggleTheme}
-        <span class="control-divider" aria-hidden="true"></span>
-
-        <button 
-          type="button" 
-          class="masthead-btn theme-toggle-btn" 
-          onclick={onToggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {#if theme === 'dark'}
-            <!-- Sun icon when dark mode is active -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="4"></circle>
-              <path d="M12 2v2"></path>
-              <path d="M12 20v2"></path>
-              <path d="m4.93 4.93 1.41 1.41"></path>
-              <path d="m17.66 17.66 1.41 1.41"></path>
-              <path d="M2 12h2"></path>
-              <path d="M20 12h2"></path>
-              <path d="m6.34 17.66-1.41 1.41"></path>
-              <path d="m19.07 4.93-1.41 1.41"></path>
-            </svg>
-          {:else}
-            <!-- Moon icon when light mode is active -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
-            </svg>
-          {/if}
-        </button>
-      {/if}
     </div>
   </div>
 </header>

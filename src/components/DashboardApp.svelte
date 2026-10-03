@@ -8,31 +8,31 @@
 
   import type { CalendarEvent } from '../lib/types';
   import { getStartOfWeek, addWeeks, formatDateIso } from '../lib/dates';
+  import { getAutomaticTheme } from '../lib/sunSchedule';
   import { HOUSEHOLD_MEMBERS, MOCK_PHOTOS, MOCK_WEATHER, getInitialMockEvents } from '../data/mock';
 
   let currentWeekStart = $state(getStartOfWeek(new Date()));
   let events = $state<CalendarEvent[]>(getInitialMockEvents());
   let selectedEvent = $state<CalendarEvent | null>(null);
   let isAddModalOpen = $state(false);
-  let theme = $state<'light' | 'dark'>('light');
+  let theme = $state<'light' | 'dark'>(getAutomaticTheme());
 
   onMount(() => {
-    try {
-      const saved = localStorage.getItem('sashframe-theme');
-      if (saved === 'dark' || saved === 'light') {
-        theme = saved;
-      }
-    } catch (e) {}
+    // Initial evaluation of solar theme
+    theme = getAutomaticTheme(new Date());
     document.documentElement.setAttribute('data-theme', theme);
-  });
 
-  function handleToggleTheme() {
-    theme = theme === 'light' ? 'dark' : 'light';
-    try {
-      localStorage.setItem('sashframe-theme', theme);
-    } catch (e) {}
-    document.documentElement.setAttribute('data-theme', theme);
-  }
+    // Periodically re-evaluate every 30 seconds for sunrise/sunset transitions
+    const interval = setInterval(() => {
+      const current = getAutomaticTheme(new Date());
+      if (current !== theme) {
+        theme = current;
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  });
 
   function handlePrevWeek() {
     currentWeekStart = addWeeks(currentWeekStart, -1);
@@ -84,12 +84,10 @@
   <div class="calendar-panel">
     <DateNavigation 
       {currentWeekStart}
-      {theme}
       onPrevWeek={handlePrevWeek}
       onNextWeek={handleNextWeek}
       onToday={handleToday}
       onAddEvent={handleOpenAddModal}
-      onToggleTheme={handleToggleTheme}
     />
 
     <div class="week-view-container">

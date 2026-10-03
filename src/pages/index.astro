@@ -1,6 +1,9 @@
 ---
 import '../styles/global.css';
 import DashboardApp from '../components/DashboardApp.svelte';
+import { UK_SOUTH_EAST_SUN_SCHEDULE } from '../lib/sunSchedule';
+
+const sunScheduleJson = JSON.stringify(UK_SOUTH_EAST_SUN_SCHEDULE);
 ---
 
 <!DOCTYPE html>
@@ -10,11 +13,30 @@ import DashboardApp from '../components/DashboardApp.svelte';
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Sashframe</title>
-    <script is:inline>
+    <script is:inline define:vars={{ sunScheduleJson }}>
       (function() {
         try {
-          var saved = localStorage.getItem('sashframe-theme') || 'light';
-          document.documentElement.setAttribute('data-theme', saved);
+          var schedule = JSON.parse(sunScheduleJson);
+          var now = new Date();
+          var parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/London',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }).formatToParts(now);
+
+          var m = (parts.find(function(p) { return p.type === 'month'; }) || {}).value || '01';
+          var d = (parts.find(function(p) { return p.type === 'day'; }) || {}).value || '01';
+          var h = (parts.find(function(p) { return p.type === 'hour'; }) || {}).value || '12';
+          var min = (parts.find(function(p) { return p.type === 'minute'; }) || {}).value || '00';
+
+          var key = m + '-' + d;
+          var times = schedule[key] || ['07:00', '19:00'];
+          var timeStr = h + ':' + min;
+          var isDaylight = timeStr >= times[0] && timeStr < times[1];
+          document.documentElement.setAttribute('data-theme', isDaylight ? 'light' : 'dark');
         } catch (e) {}
       })();
     </script>
