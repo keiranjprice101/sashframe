@@ -24,7 +24,6 @@ It features a horizontal layout inspired by a traditional photo calendar, with a
 - **Editorial Masthead**:
   - Clean date range heading (e.g. `September 28 – October 4`).
   - Minimalist week navigation (`‹`, `Today`, `›`) and lightweight `+` add event action.
-  - Top-right icon-only theme toggle.
 - **Whitespace-Driven 7-Day Grid**:
   - Monday-to-Sunday columns separated by hairline dividers and generous whitespace.
   - Unboxed day numbers with a soft circular indicator for the current day.
@@ -38,11 +37,13 @@ It features a horizontal layout inspired by a traditional photo calendar, with a
   - Touch-accessible event detail dialog (View / Edit / Delete).
   - Add-event dialog with member selection, title, date, time, location, and notes.
 
-### 🌓 Dark Mode
-- **Warm Charcoal Aesthetic**: Designed for dark display glass, walnut framing, and evening domestic lighting. Uses very dark warm charcoal tones (`#181412` base, `#1E1A17` surface, `#26211D` elevated) rather than harsh OLED black or cold developer blue-slate.
-- **Soft Typographic Contrast**: Soft off-white text (`#EAE4DC`), muted secondary text, warm walnut amber today badge, and subtly lifted household accents for readable contrast.
-- **Unaltered Photography**: Photographs remain full-bleed and unaltered in both light and dark modes.
-- **Zero-Flicker Persistence**: Selected theme is stored in `localStorage` (`'sashframe-theme'`) and pre-applied via a synchronous `<head>` script to eliminate theme flashing during reloads or device reboots.
+### 🌓 Solar-Driven Automatic Day/Night Theme
+- **Zero-API Local Schedule**: Automatically switches between Light and Dark mode using a built-in 2-value-per-day astronomical lookup table (`[sunrise, sunset]`) calibrated for **UK South East England** (~51.3° N, 0.0° W).
+- **Light Mode After Sunrise, Dark Mode After Sunset**: Matches natural circadian rhythms without requiring an internet connection or external weather/astronomy API in production.
+- **BST / GMT Civil Time Aware**: Seamlessly accounts for British Summer Time (UTC+1) and Greenwich Mean Time (UTC+0).
+- **Real-Time Kiosk Transition**: Checks every 30 seconds while the display is running, smoothly transitioning when sunrise or sunset occurs.
+- **Instant Pre-Render**: Injected synchronously in `<head>` before the DOM paints to prevent theme flashing on load or reboots.
+- **Warm Charcoal Palette**: Dark mode utilizes deep warm charcoal tones (`#181412` base, `#1E1A17` surface) and soft off-white typography (`#EAE4DC`), complementing a physical walnut display frame.
 
 ---
 
@@ -61,11 +62,24 @@ It features a horizontal layout inspired by a traditional photo calendar, with a
 
 ```text
 public/
-  photos/                  # Local photography assets
+  photos/                  # Fallback/placeholder photography assets
+data/
+  photos/
+    incoming/              # Drop incoming images here (.jpg, .jpeg, .png, .webp)
+    processed/             # Ingested, resized WebP images (<hash>.webp)
+    manifest.json          # Generated manifest consumed by /api/photos
+scripts/
+  install.sh               # One-step environment setup (creates .venv, installs Python & Node packages)
+  dev.sh                   # Process supervisor starting Astro and photo watcher
+services/
+  photos/
+    processor.py           # Watchdog filesystem event monitor and debounced runner
+    processing.py          # Validation, EXIF transpose, aspect-ratio resize, WebP conversion
+    manifest.py            # Manifest generation, reconciliation, and orphan cleanup
 src/
   components/
-    PhotoPanel.svelte      # Rotating photo slide with weather, 24h clock, & scrims
-    DateNavigation.svelte  # Week navigation masthead, add event trigger, & dark mode toggle
+    PhotoPanel.svelte      # Rotating photo slide with manifest polling & clock overlay
+    DateNavigation.svelte  # Week navigation masthead & add event trigger
     CalendarWeek.svelte    # 7-day week schedule grid with editorial entries
     EventModal.svelte      # Event details popup (View / Edit / Delete)
     AddEventModal.svelte   # Modal form for creating new events
@@ -73,9 +87,14 @@ src/
   data/
     mock.ts                # Seed household members, events, weather, & photos
   lib/
-    types.ts               # TypeScript interfaces (CalendarEvent, Member, Weather, etc.)
+    types.ts               # TypeScript interfaces (CalendarEvent, PhotoManifestItem, etc.)
     dates.ts               # Date math, ISO formatters, BST-aware 24h clock utilities
+    sunSchedule.ts         # 366-day UK South East sunrise/sunset schedule & solar theme evaluators
   pages/
+    api/
+      photos.ts            # Dynamic API endpoint serving data/photos/manifest.json
+    photos/
+      [...image].ts        # File route serving processed WebP images
     index.astro            # Fullscreen Kiosk page shell with theme pre-init script
   styles/
     global.css             # Light/dark design tokens, typography, & touch resets
@@ -83,17 +102,45 @@ src/
 
 ---
 
-## 🚀 Running & Building
+## 🚀 Running & Development
 
+### 1. One-Step Environment Setup
+Run the unified setup script to automatically create `.venv`, install Python dependencies (`Pillow`, `watchdog`), and install npm dependencies:
 ```bash
-# Start background development server (per project rule)
-astro dev --background
+npm run setup
+# or: bash scripts/install.sh
+```
 
-# Check dev server status, logs, or stop
-astro dev status
-astro dev logs
-astro dev stop
+*(Alternatively, manual setup: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && npm install`)*
 
+### 3. Start Development Environment
+Run a single command from the project root:
+```bash
+npm run dev
+```
+
+This starts:
+- **Astro dev server** (with hot-reload and dynamic `/api/photos` endpoint)
+- **Python photo watcher** (monitoring `data/photos/incoming/` with completed-write semantics)
+
+Pressing `Ctrl+C` cleanly terminates both processes without leaving orphaned Python or Node workers.
+
+#### Component-specific dev commands:
+- `npm run dev:astro` — Astro dev server only
+- `npm run dev:photos` — Python photo processor only
+
+### 4. Testing the Photo Ingestion Pipeline
+1. While `npm run dev` is running, copy any `.jpg`, `.jpeg`, `.png`, or `.webp` file into `data/photos/incoming/`:
+   ```bash
+   cp ~/Pictures/sample.jpg data/photos/incoming/
+   ```
+2. The watcher detects write completion, validates the image, normalizes EXIF orientation, scales to max 1920px (preserving aspect ratio without upscaling), converts to WebP, and writes atomically to `data/photos/processed/<hash>.webp`.
+3. The manifest is regenerated at `data/photos/manifest.json`.
+4. The Astro frontend polls `/api/photos` every 5 seconds, picks up the new image, and adds it to the photo rotation without reloading the page or restarting the server.
+5. Deleting the file from `data/photos/incoming/` automatically removes it from `manifest.json` and deletes the orphaned `.webp` file.
+
+### 5. Production Build & Type Checking
+```bash
 # Run production build
 npm run build
 
@@ -105,10 +152,14 @@ npx astro check
 
 ## 📋 TODO & Roadmap
 
-### 🔄 Data & Integrations
+### 🔄 Photo Pipeline & Integrations
+- [ ] **Google Drive / rclone Sync**: Upstream sync step to periodically mirror a shared Google Drive album into `data/photos/incoming/`.
+- [ ] **HEIC / HEIF Format Support**: Add `pillow-heif` support once system libraries (`libheif`) are available.
+- [ ] **Local Photo Reader**: Integration with Immich or local network folder (Syncthing/SMB).
+
+### 📅 Calendar & Weather
 - [ ] **Calendar Synchronization**: Connect to CalDAV / iCal feeds, Google Calendar, or Apple iCloud API.
 - [ ] **Live Weather Feed**: Replace mock weather with a live API (e.g., Open-Meteo or local Weather Underground station).
-- [ ] **Photo Source Integration**: Dynamic image loading from a local folder, Immich, or Syncthing share.
 
 ### 💾 Storage & Backend
 - [ ] **Persistence Layer**: Store created/edited events in SQLite or a lightweight local JSON store.
