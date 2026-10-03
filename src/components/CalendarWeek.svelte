@@ -1,22 +1,36 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import type { CalendarEvent, HouseholdMember } from '../lib/types';
-  import { getWeekDays, formatDateIso, isToday } from '../lib/dates';
+  import { getStartOfWeek, getWeekDays, formatDateIso, isToday, addDays, formatWeekRange } from '../lib/dates';
   import { HOUSEHOLD_MEMBERS } from '../data/mock';
 
   interface Props {
-    currentWeekStart: Date;
     events: CalendarEvent[];
     members?: Record<string, HouseholdMember>;
-    onSelectEvent: (event: CalendarEvent) => void;
   }
 
   let { 
-    currentWeekStart, 
     events, 
-    members = HOUSEHOLD_MEMBERS, 
-    onSelectEvent 
+    members = HOUSEHOLD_MEMBERS
   }: Props = $props();
 
+  let now = $state(new Date());
+  let timer: ReturnType<typeof setInterval>;
+
+  onMount(() => {
+    // Keep date updated live every 30 seconds
+    timer = setInterval(() => {
+      now = new Date();
+    }, 30000);
+  });
+
+  onDestroy(() => {
+    if (timer) clearInterval(timer);
+  });
+
+  let currentWeekStart = $derived(getStartOfWeek(now));
+  let weekEnd = $derived(addDays(currentWeekStart, 6));
+  let formattedRange = $derived(formatWeekRange(currentWeekStart, weekEnd));
   let weekDays = $derived(getWeekDays(currentWeekStart));
 
   // Map events per day ISO string
@@ -33,34 +47,59 @@
   }
 </script>
 
-<div class="calendar-grid">
-  {#each weekDays as day (day.toISOString())}
-    {@const { allDay, timed } = getEventsForDay(day)}
-    {@const todayClass = isToday(day)}
+<div class="calendar-week-container">
+  <!-- Week Masthead: Consistent with month masthead, zero buttons/controls -->
+  <header class="week-masthead">
+    <h1 class="week-title">{formattedRange}</h1>
+  </header>
 
-    <div class="day-column" class:is-today={todayClass}>
-      <!-- Day Header: Unboxed, typographic, editorial -->
-      <div class="day-header">
-        <span class="day-name">{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
-        <div class="day-number" class:active-today={todayClass}>
-          {day.getDate()}
+  <!-- 7-Day Columns Grid -->
+  <div class="calendar-grid">
+    {#each weekDays as day (day.toISOString())}
+      {@const { allDay, timed } = getEventsForDay(day)}
+      {@const todayClass = isToday(day)}
+
+      <div class="day-column" class:is-today={todayClass}>
+        <!-- Day Header: Unboxed, typographic, editorial -->
+        <div class="day-header">
+          <span class="day-name">{day.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+          <div class="day-number" class:active-today={todayClass}>
+            {day.getDate()}
+          </div>
         </div>
-      </div>
 
-      <!-- Day Body: Generous breathing room, schedule typography -->
-      <div class="day-body">
-        <!-- All-Day Events Section -->
-        {#if allDay.length > 0}
-          <div class="all-day-section">
-            {#each allDay as event (event.id)}
+        <!-- Day Body: Generous breathing room, schedule typography -->
+        <div class="day-body">
+          <!-- All-Day Events Section -->
+          {#if allDay.length > 0}
+            <div class="all-day-section">
+              {#each allDay as event (event.id)}
+                {@const member = members[event.memberId] || members.alex}
+                <div class="schedule-entry all-day-entry">
+                  <span class="entry-time-label">All day</span>
+                  <div class="entry-title-row">
+                    <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
+                    <span class="entry-title">{event.title}</span>
+                  </div>
+                  {#if event.location}
+                    <span class="entry-meta">{event.location}</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Timed Events Section -->
+          <div class="timed-events-list">
+            {#each timed as event (event.id)}
               {@const member = members[event.memberId] || members.alex}
-              <button 
-                type="button" 
-                class="schedule-entry all-day-entry"
-                onclick={() => onSelectEvent(event)}
-                aria-label="{event.title}, All day event for {member.name}"
-              >
-                <span class="entry-time-label">All day</span>
+              <div class="schedule-entry timed-entry">
+                <div class="entry-time-label">
+                  {event.startTime}
+                  {#if event.endTime}
+                    <span class="time-end">– {event.endTime}</span>
+                  {/if}
+                </div>
                 <div class="entry-title-row">
                   <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
                   <span class="entry-title">{event.title}</span>
@@ -68,47 +107,49 @@
                 {#if event.location}
                   <span class="entry-meta">{event.location}</span>
                 {/if}
-              </button>
+              </div>
             {/each}
           </div>
-        {/if}
-
-        <!-- Timed Events Section -->
-        <div class="timed-events-list">
-          {#each timed as event (event.id)}
-            {@const member = members[event.memberId] || members.alex}
-            <button 
-              type="button" 
-              class="schedule-entry timed-entry"
-              onclick={() => onSelectEvent(event)}
-              aria-label="{event.title} at {event.startTime} for {member.name}"
-            >
-              <div class="entry-time-label">
-                {event.startTime}
-                {#if event.endTime}
-                  <span class="time-end">– {event.endTime}</span>
-                {/if}
-              </div>
-              <div class="entry-title-row">
-                <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
-                <span class="entry-title">{event.title}</span>
-              </div>
-              {#if event.location}
-                <span class="entry-meta">{event.location}</span>
-              {/if}
-            </button>
-          {/each}
         </div>
       </div>
-    </div>
-  {/each}
+    {/each}
+  </div>
 </div>
 
 <style>
+  .calendar-week-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-surface);
+    overflow: hidden;
+  }
+
+  /* Week Masthead */
+  .week-masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 1.4rem 2rem 1.15rem 2rem;
+    border-bottom: 1px solid var(--border-hairline);
+    flex-shrink: 0;
+  }
+
+  .week-title {
+    font-size: 2.1rem;
+    font-weight: 500;
+    color: var(--text-main);
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+
+  /* 7-Day Grid */
   .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     width: 100%;
     background-color: transparent;
     overflow: hidden;
@@ -120,7 +161,7 @@
     background-color: var(--bg-surface);
     height: 100%;
     overflow: hidden;
-    padding: 0 0.75rem;
+    padding: 0 0.85rem;
     border-right: 1px solid var(--border-hairline);
   }
 
@@ -128,15 +169,20 @@
     border-right: none;
   }
 
+  .day-column.is-today {
+    background-color: var(--bg-surface-elevated);
+  }
+
   /* Day Header */
   .day-header {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 1.25rem 0.25rem 0.85rem 0.25rem;
+    padding: 1.15rem 0.25rem 0.85rem 0.25rem;
     background: transparent;
     border-bottom: 1px solid var(--border-hairline);
     gap: 0.35rem;
+    flex-shrink: 0;
   }
 
   .day-name {
@@ -154,7 +200,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.75rem;
+    font-size: 1.65rem;
     font-weight: 400;
     color: var(--text-main);
     font-variant-numeric: tabular-nums;
@@ -164,8 +210,10 @@
   .day-number.active-today {
     background-color: var(--accent-walnut);
     color: var(--accent-walnut-text);
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     font-weight: 500;
+    width: 2rem;
+    height: 2rem;
   }
 
   /* Day Body & Events */
@@ -173,58 +221,39 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 1.25rem 0.25rem 1.5rem 0.25rem;
+    padding: 1.15rem 0.25rem 1.25rem 0.25rem;
     overflow-y: auto;
   }
 
   .all-day-section {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding-bottom: 1rem;
-    margin-bottom: 1rem;
+    gap: 0.85rem;
+    padding-bottom: 0.85rem;
+    margin-bottom: 0.85rem;
     border-bottom: 1px solid var(--border-hairline);
   }
 
   .timed-events-list {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1.15rem;
   }
 
-  /* Schedule Entry: Typeset schedule, not a card */
+  /* Schedule Entry: Typeset schedule, non-touch presentation */
   .schedule-entry {
     width: 100%;
     text-align: left;
     background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
-    padding: 0.35rem 0.3rem;
+    padding: 0.2rem 0;
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
-    cursor: pointer;
-    transition: background-color 0.15s ease, transform 0.1s ease;
-    min-height: 48px; /* Touch-first accessibility */
-  }
-
-  .schedule-entry:hover {
-    background-color: var(--control-hover);
-  }
-
-  .schedule-entry:focus-visible {
-    outline: 2px solid var(--accent-walnut);
-    outline-offset: 1px;
-  }
-
-  .schedule-entry:active {
-    background-color: var(--control-hover);
-    transform: scale(0.99);
   }
 
   .entry-time-label {
-    font-size: 0.78rem;
-    font-weight: 500;
+    font-size: 0.76rem;
+    font-weight: 550;
     color: var(--text-muted);
     letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
@@ -248,11 +277,11 @@
   .entry-title-row {
     display: flex;
     align-items: flex-start;
-    gap: 0.55rem;
+    gap: 0.5rem;
   }
 
   .accent-bar {
-    width: 2px;
+    width: 2.5px;
     min-height: 1.15em;
     align-self: stretch;
     border-radius: 1px;
@@ -261,8 +290,8 @@
   }
 
   .entry-title {
-    font-size: 0.98rem;
-    font-weight: 550;
+    font-size: 0.94rem;
+    font-weight: 520;
     color: var(--text-main);
     line-height: 1.3;
     overflow-wrap: break-word;
@@ -270,8 +299,8 @@
   }
 
   .entry-meta {
-    padding-left: calc(2px + 0.55rem);
-    font-size: 0.82rem;
+    padding-left: calc(2.5px + 0.5rem);
+    font-size: 0.8rem;
     font-weight: 400;
     color: var(--text-light);
     line-height: 1.25;
@@ -279,31 +308,39 @@
   }
 
   @media (max-width: 1366px) {
+    .week-masthead {
+      padding: 1rem 1.5rem 0.85rem 1.5rem;
+    }
+    .week-title {
+      font-size: 1.7rem;
+    }
     .day-column {
       padding: 0 0.55rem;
     }
     .day-header {
-      padding: 1rem 0.25rem 0.75rem 0.25rem;
+      padding: 0.9rem 0.25rem 0.65rem 0.25rem;
     }
     .day-name {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
     }
     .day-number {
-      font-size: 1.5rem;
-      width: 2rem;
-      height: 2rem;
+      font-size: 1.4rem;
+      width: 1.9rem;
+      height: 1.9rem;
     }
     .day-number.active-today {
-      font-size: 1.1rem;
+      font-size: 1rem;
+      width: 1.7rem;
+      height: 1.7rem;
     }
     .entry-title {
-      font-size: 0.92rem;
+      font-size: 0.86rem;
     }
     .entry-time-label {
-      font-size: 0.74rem;
+      font-size: 0.7rem;
     }
     .entry-meta {
-      font-size: 0.78rem;
+      font-size: 0.74rem;
     }
   }
 </style>

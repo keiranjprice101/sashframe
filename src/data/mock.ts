@@ -62,7 +62,7 @@ export function getInitialMockEvents(): CalendarEvent[] {
 
   const dayStr = (offset: number) => formatDateIso(addDays(mon, offset));
 
-  return [
+  const baseEvents: CalendarEvent[] = [
     {
       id: 'event-1',
       title: 'Work Project Sprint',
@@ -182,4 +182,139 @@ export function getInitialMockEvents(): CalendarEvent[] {
       description: '10km trail walk with mountain viewpoints.'
     }
   ];
+
+  const year = (new Date()).getFullYear();
+  const month = (new Date()).getMonth();
+  const monthDayStr = (dayNum: number) => {
+    const d = new Date(year, month, dayNum);
+    return formatDateIso(d);
+  };
+
+  const monthSpreadEvents: CalendarEvent[] = [
+    {
+      id: 'month-ev-1',
+      title: 'Morning Yoga Flow',
+      memberId: 'alex',
+      date: monthDayStr(2),
+      startTime: '07:30',
+      endTime: '08:30',
+      isAllDay: false,
+      location: 'Garden Studio'
+    },
+    {
+      id: 'month-ev-2',
+      title: 'Monthly Budget Review',
+      memberId: 'sham',
+      date: monthDayStr(5),
+      startTime: '10:00',
+      endTime: '11:00',
+      isAllDay: false,
+      location: 'Home Office'
+    },
+    {
+      id: 'month-ev-3',
+      title: 'Vehicle MOT & Service',
+      memberId: 'sham',
+      date: monthDayStr(8),
+      startTime: '08:30',
+      endTime: '10:00',
+      isAllDay: false,
+      location: 'Station Garage'
+    },
+    {
+      id: 'month-ev-4',
+      title: 'Photography Walk',
+      memberId: 'alex',
+      date: monthDayStr(11),
+      startTime: '14:30',
+      endTime: '16:30',
+      isAllDay: false,
+      location: 'Botanical Gardens'
+    },
+    {
+      id: 'month-ev-5',
+      title: 'Team Product Demo',
+      memberId: 'sham',
+      date: monthDayStr(13),
+      startTime: '15:00',
+      endTime: '16:00',
+      isAllDay: false,
+      location: 'Video Call'
+    },
+    {
+      id: 'month-ev-6',
+      title: 'Wine & Cheese Evening',
+      memberId: 'alex',
+      date: monthDayStr(16),
+      startTime: '19:30',
+      endTime: '22:00',
+      isAllDay: false,
+      location: 'Cellar & Vine'
+    },
+    {
+      id: 'month-ev-7',
+      title: 'Autumn Garden Prep',
+      memberId: 'sham',
+      date: monthDayStr(18),
+      isAllDay: true,
+      description: 'Planting spring bulbs and clearing summer beds.'
+    },
+    {
+      id: 'month-ev-8',
+      title: 'Architecture Review',
+      memberId: 'sham',
+      date: monthDayStr(20),
+      startTime: '11:00',
+      endTime: '12:30',
+      isAllDay: false
+    },
+    {
+      id: 'month-ev-9',
+      title: 'Book Discussion Club',
+      memberId: 'alex',
+      date: monthDayStr(22),
+      startTime: '19:00',
+      endTime: '20:30',
+      isAllDay: false,
+      location: 'Community Library'
+    },
+    {
+      id: 'month-ev-10',
+      title: 'Modern Art Exhibition',
+      memberId: 'alex',
+      date: monthDayStr(25),
+      startTime: '13:00',
+      endTime: '15:30',
+      isAllDay: false,
+      location: 'City Gallery'
+    },
+    {
+      id: 'month-ev-11',
+      title: 'Family Sunday Dinner',
+      memberId: 'sham',
+      date: monthDayStr(28),
+      startTime: '17:30',
+      endTime: '20:00',
+      isAllDay: false
+    },
+    {
+      id: 'month-ev-12',
+      title: 'Acoustic Folk Concert',
+      memberId: 'alex',
+      date: monthDayStr(30),
+      startTime: '20:00',
+      endTime: '22:30',
+      isAllDay: false,
+      location: 'The Old Barn'
+    }
+  ];
+
+  const allEvents = [...baseEvents];
+  for (const ev of monthSpreadEvents) {
+    if (!allEvents.some(e => e.date === ev.date && e.title === ev.title)) {
+      allEvents.push(ev);
+    }
+  }
+
+  return allEvents;
 }

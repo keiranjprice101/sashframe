@@ -1,21 +1,19 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import PhotoPanel from './PhotoPanel.svelte';
-  import DateNavigation from './DateNavigation.svelte';
+  import CalendarMonth from './CalendarMonth.svelte';
   import CalendarWeek from './CalendarWeek.svelte';
-  import EventModal from './EventModal.svelte';
-  import AddEventModal from './AddEventModal.svelte';
 
   import type { CalendarEvent } from '../lib/types';
-  import { getStartOfWeek, addWeeks, formatDateIso } from '../lib/dates';
   import { getAutomaticTheme } from '../lib/sunSchedule';
   import { HOUSEHOLD_MEMBERS, MOCK_PHOTOS, MOCK_WEATHER, getInitialMockEvents } from '../data/mock';
 
-  let currentWeekStart = $state(getStartOfWeek(new Date()));
   let events = $state<CalendarEvent[]>(getInitialMockEvents());
-  let selectedEvent = $state<CalendarEvent | null>(null);
-  let isAddModalOpen = $state(false);
   let theme = $state<'light' | 'dark'>(getAutomaticTheme());
+  let currentView = $state<'month' | 'week'>('week');
+
+  let solarTimer: ReturnType<typeof setInterval>;
+  let viewTimer: ReturnType<typeof setInterval>;
 
   onMount(() => {
     // Initial evaluation of solar theme
@@ -23,7 +21,7 @@
     document.documentElement.setAttribute('data-theme', theme);
 
     // Periodically re-evaluate every 30 seconds for sunrise/sunset transitions
-    const interval = setInterval(() => {
+    solarTimer = setInterval(() => {
       const current = getAutomaticTheme(new Date());
       if (current !== theme) {
         theme = current;
@@ -31,45 +29,16 @@
       }
     }, 30000);
 
-    return () => clearInterval(interval);
+    // Smoothly cycle between week view and month view every 60 seconds
+    viewTimer = setInterval(() => {
+      currentView = currentView === 'month' ? 'week' : 'month';
+    }, 60000);
   });
 
-  function handlePrevWeek() {
-    currentWeekStart = addWeeks(currentWeekStart, -1);
-  }
-
-  function handleNextWeek() {
-    currentWeekStart = addWeeks(currentWeekStart, 1);
-  }
-
-  function handleToday() {
-    currentWeekStart = getStartOfWeek(new Date());
-  }
-
-  function handleSelectEvent(event: CalendarEvent) {
-    selectedEvent = event;
-  }
-
-  function handleCloseEventModal() {
-    selectedEvent = null;
-  }
-
-  function handleDeleteEvent(eventId: string) {
-    events = events.filter(e => e.id !== eventId);
-    selectedEvent = null;
-  }
-
-  function handleOpenAddModal() {
-    isAddModalOpen = true;
-  }
-
-  function handleCloseAddModal() {
-    isAddModalOpen = false;
-  }
-
-  function handleSaveNewEvent(newEvent: CalendarEvent) {
-    events = [...events, newEvent];
-  }
+  onDestroy(() => {
+    if (solarTimer) clearInterval(solarTimer);
+    if (viewTimer) clearInterval(viewTimer);
+  });
 </script>
 
 <div class="kiosk-dashboard">
@@ -80,42 +49,34 @@
     rotationIntervalMs={60000} 
   />
 
-  <!-- Calendar Panel (Right side, ~60% width) -->
+  <!-- Calendar Panel (Right side, taking up entirety of right side) -->
   <div class="calendar-panel">
-    <DateNavigation 
-      {currentWeekStart}
-      onPrevWeek={handlePrevWeek}
-      onNextWeek={handleNextWeek}
-      onToday={handleToday}
-      onAddEvent={handleOpenAddModal}
-    />
+    <div class="view-viewport">
+      <div 
+        class="view-layer" 
+        class:is-active={currentView === 'month'} 
+        class:is-hidden={currentView !== 'month'}
+        aria-hidden={currentView !== 'month'}
+      >
+        <CalendarMonth 
+          {events}
+          members={HOUSEHOLD_MEMBERS}
+        />
+      </div>
 
-    <div class="week-view-container">
-      <CalendarWeek 
-        {currentWeekStart}
-        {events}
-        members={HOUSEHOLD_MEMBERS}
-        onSelectEvent={handleSelectEvent}
-      />
+      <div 
+        class="view-layer" 
+        class:is-active={currentView === 'week'} 
+        class:is-hidden={currentView !== 'week'}
+        aria-hidden={currentView !== 'week'}
+      >
+        <CalendarWeek 
+          {events}
+          members={HOUSEHOLD_MEMBERS}
+        />
+      </div>
     </div>
   </div>
-
-  <!-- Event Details Modal -->
-  <EventModal 
-    event={selectedEvent}
-    members={HOUSEHOLD_MEMBERS}
-    onClose={handleCloseEventModal}
-    onDelete={handleDeleteEvent}
-  />
-
-  <!-- Add Event Modal -->
-  <AddEventModal 
-    isOpen={isAddModalOpen}
-    defaultDate={formatDateIso(new Date())}
-    members={HOUSEHOLD_MEMBERS}
-    onClose={handleCloseAddModal}
-    onSave={handleSaveNewEvent}
-  />
 </div>
 
 <style>
@@ -135,12 +96,36 @@
     flex-direction: column;
     overflow: hidden;
     background-color: var(--bg-surface);
+    position: relative;
   }
 
-  .week-view-container {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
+  .view-viewport {
     position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .view-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: opacity, transform;
+  }
+
+  .view-layer.is-active {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+    z-index: 2;
+  }
+
+  .view-layer.is-hidden {
+    opacity: 0;
+    transform: scale(0.994);
+    pointer-events: none;
+    z-index: 1;
   }
 </style>

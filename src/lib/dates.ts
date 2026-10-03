@@ -107,3 +107,71 @@ export function formatWeekRange(start: Date, end: Date): string {
     return `${startMonth} ${start.getDate()}, ${start.getFullYear()} – ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
   }
 }
+
+export interface MonthGridDay {
+  date: Date;
+  dateIso: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isWeekend: boolean;
+}
+
+export interface MonthGridData {
+  monthName: string;
+  year: number;
+  title: string;
+  totalWeeks: number;
+  days: MonthGridDay[];
+}
+
+export function getMonthGrid(referenceDate: Date = new Date()): MonthGridData {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth(); // 0-11
+
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+  const daysInMonth = lastDayOfMonth.getDate();
+
+  // Monday-based week: Monday is 0, Sunday is 6
+  const startDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7;
+
+  // Preceding days from previous month to align with Monday
+  const totalDays = startDayOfWeek + daysInMonth;
+  const totalWeeks = Math.ceil(totalDays / 7);
+  const totalGridDays = totalWeeks * 7;
+
+  const days: MonthGridDay[] = [];
+  const today = new Date();
+
+  for (let i = 0; i < totalGridDays; i++) {
+    const dayOffset = i - startDayOfWeek;
+    const date = new Date(year, month, 1 + dayOffset);
+    date.setHours(0, 0, 0, 0);
+
+    const isCurrentMonth = date.getMonth() === month;
+    const isTodayDate = isSameDay(date, today);
+    const dayOfWeek = (date.getDay() + 6) % 7;
+    const isWeekend = dayOfWeek >= 5;
+
+    days.push({
+      date,
+      dateIso: formatDateIso(date),
+      dayNumber: date.getDate(),
+      isCurrentMonth,
+      isToday: isTodayDate,
+      isWeekend
+    });
+  }
+
+  const monthName = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'Europe/London' }).format(firstDayOfMonth);
+  const title = `${monthName} ${year}`;
+
+  return {
+    monthName,
+    year,
+    title,
+    totalWeeks,
+    days
+  };
+}
