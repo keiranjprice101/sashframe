@@ -17,25 +17,31 @@ It features a horizontal layout inspired by a traditional photo calendar, with a
 - **Typographic Clock & Weather Overlay**:
   - Direct-on-image 24-hour live clock with London BST awareness.
   - Clean day of week and full date display (non-redundant).
-  - Minimal weather indicator with lightweight icon (`14°C · Cloudy`).
-- **Touch-Friendly**: Tap anywhere on the photo panel to advance to the next picture immediately.
+  - Enlarged live weather indicator (`1.45rem`) with clear WMO icon (`18°C · Overcast`), readable from across the room.
+- **Ambient & Glanceable**: Hands-free display designed to sit passively in a walnut frame; rotates photos automatically every 60 seconds.
 
 ### 📅 Calendar Panel (Right ~60%)
-- **Editorial Masthead**:
-  - Clean date range heading (e.g. `September 28 – October 4`).
-  - Minimalist week navigation (`‹`, `Today`, `›`) and lightweight `+` add event action.
-- **Whitespace-Driven 7-Day Grid**:
-  - Monday-to-Sunday columns separated by hairline dividers and generous whitespace.
-  - Unboxed day numbers with a soft circular indicator for the current day.
-  - All-day events row at the top of each day column.
-  - Chronological timed schedule entries.
+- **Automatic Month ↔ Week Rotation**:
+  - Smoothly transitions between a full **Month View** and **Week View** every 60 seconds with an 800ms cubic-bezier crossfade and subtle depth dissolve.
+- **Full Month View**:
+  - Takes up the entirety of the right-hand panel with a 7-column grid (Mon–Sun).
+  - Clean masthead (*e.g. October 2026*).
+  - Dynamic week rows with current day highlighted via the warm walnut circular indicator.
+  - Preceding and trailing month days softly muted for scannability.
+- **Week View**:
+  - Detailed 7-day schedule with all-day and timed entries.
+  - Aligned typographic masthead (*e.g. September 28 – October 4*) matching the month layout.
 - **Schedule Entries (Non-Card Treatment)**:
   - Clean typographic schedule entries instead of rounded SaaS/Kanban cards or heavy shadows.
   - Event title as primary visual element, time secondary, and location tertiary.
-  - Thin 2px vertical accent bar color-coded by household member (**Alex** in terracotta coral, **Sham** in muted sage emerald).
-- **Interactive Modals**:
-  - Touch-accessible event detail dialog (View / Edit / Delete).
-  - Add-event dialog with member selection, title, date, time, location, and notes.
+  - Thin 2.5px vertical accent bar color-coded by household member (**Alex** in terracotta coral, **Sham** in muted sage emerald).
+- **Non-Touch Presentation**:
+  - All interactive buttons, chrome, and modal popups removed for a serene, print-like ambient aesthetic.
+
+### 🌦️ Live Authless Weather (Local Forecast)
+- **Open-Meteo Integration**: Authless, keyless weather API calibrated for Local Forecast (`51.453° N, -0.902° W`).
+- **Comprehensive WMO Interpretation**: Translates meteorological codes into clean conditions (*Clear, Partly Cloudy, Overcast, Rain, Drizzle, Showers, Snow, Fog, Thunderstorm*).
+- **Background Refresh**: Automatically updates every 10 minutes with silent fallback to preserve reliability.
 
 ### 🌓 Solar-Driven Automatic Day/Night Theme
 - **Zero-API Local Schedule**: Automatically switches between Light and Dark mode using a built-in 2-value-per-day astronomical lookup table (`[sunrise, sunset]`) calibrated for **UK South East England** (~51.3° N, 0.0° W).
@@ -78,18 +84,17 @@ services/
     manifest.py            # Manifest generation, reconciliation, and orphan cleanup
 src/
   components/
-    PhotoPanel.svelte      # Rotating photo slide with manifest polling & clock overlay
-    DateNavigation.svelte  # Week navigation masthead & add event trigger
-    CalendarWeek.svelte    # 7-day week schedule grid with editorial entries
-    EventModal.svelte      # Event details popup (View / Edit / Delete)
-    AddEventModal.svelte   # Modal form for creating new events
-    DashboardApp.svelte    # Root Svelte container, theme state, & session state
+    PhotoPanel.svelte      # Rotating photo slide with manifest polling, live weather, & clock
+    CalendarMonth.svelte   # Full month 7-column grid with live today indicator & event listings
+    CalendarWeek.svelte    # 7-day week schedule grid with non-touch editorial entries
+    DashboardApp.svelte    # Root Svelte container, solar day/night theme, & 60s view rotation
   data/
     mock.ts                # Seed household members, events, weather, & photos
   lib/
     types.ts               # TypeScript interfaces (CalendarEvent, PhotoManifestItem, etc.)
-    dates.ts               # Date math, ISO formatters, BST-aware 24h clock utilities
+    dates.ts               # Date math, ISO formatters, BST-aware clock, & month grid helpers
     sunSchedule.ts         # 366-day UK South East sunrise/sunset schedule & solar theme evaluators
+    weather.ts             # Authless Open-Meteo weather client for Local Forecast
   pages/
     api/
       photos.ts            # Dynamic API endpoint serving data/photos/manifest.json
@@ -97,7 +102,7 @@ src/
       [...image].ts        # File route serving processed WebP images
     index.astro            # Fullscreen Kiosk page shell with theme pre-init script
   styles/
-    global.css             # Light/dark design tokens, typography, & touch resets
+    global.css             # Light/dark design tokens, typography, & reset styles
 ```
 
 ---
@@ -157,9 +162,9 @@ npx astro check
 - [ ] **HEIC / HEIF Format Support**: Add `pillow-heif` support once system libraries (`libheif`) are available.
 - [ ] **Local Photo Reader**: Integration with Immich or local network folder (Syncthing/SMB).
 
-### 📅 Calendar & Weather
+### 📅 Calendar & Integrations
 - [ ] **Calendar Synchronization**: Connect to CalDAV / iCal feeds, Google Calendar, or Apple iCloud API.
-- [ ] **Live Weather Feed**: Replace mock weather with a live API (e.g., Open-Meteo or local Weather Underground station).
+- [x] **Live Weather Feed**: Integrated Open-Meteo authless API for Local Forecast with WMO condition mapping.
 
 ### 💾 Storage & Backend
 - [ ] **Persistence Layer**: Store created/edited events in SQLite or a lightweight local JSON store.
