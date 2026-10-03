@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Photo, PhotoManifestItem, Weather } from '../lib/types';
   import { formatDisplayDate, formatDayName, formatLiveTime } from '../lib/dates';
+  import { fetchLocalWeather } from '../lib/weather';
 
   interface Props {
     photos?: Photo[];
@@ -17,6 +18,7 @@
 
   let manifestPhotos = $state<Photo[]>([]);
   let activePhotos = $derived(manifestPhotos.length > 0 ? manifestPhotos : photos);
+  let currentWeather = $state<Weather>(weather);
 
   let currentIndex = $state(0);
   let now = $state(new Date());
@@ -24,6 +26,7 @@
   let timer: ReturnType<typeof setInterval>;
   let clockTimer: ReturnType<typeof setInterval>;
   let pollTimer: ReturnType<typeof setInterval>;
+  let weatherTimer: ReturnType<typeof setInterval>;
 
   function nextPhoto() {
     if (activePhotos.length <= 1) {
@@ -94,23 +97,33 @@
     clockTimer = setInterval(() => {
       now = new Date();
     }, 1000);
+
+    async function updateWeather() {
+      try {
+        const fresh = await fetchLocalWeather();
+        currentWeather = fresh;
+      } catch (err) {
+        // Fallback to default or previous weather on network failure
+      }
+    }
+
+    // Fetch live weather immediately on mount
+    updateWeather();
+
+    // Refresh weather every 10 minutes
+    weatherTimer = setInterval(updateWeather, 10 * 60 * 1000);
   });
 
   onDestroy(() => {
     if (timer) clearInterval(timer);
     if (clockTimer) clearInterval(clockTimer);
     if (pollTimer) clearInterval(pollTimer);
+    if (weatherTimer) clearInterval(weatherTimer);
   });
 </script>
 
 <!-- Photo Panel container (approx 40% width in kiosk layout) -->
-<div 
-  class="photo-panel" 
-  onclick={nextPhoto}
-  role="button"
-  tabindex="0"
-  aria-label="Tap to show next photo"
->
+<div class="photo-panel">
   <!-- Render all photos stacked for crossfade transition -->
   {#each activePhotos as photo, idx (photo.id)}
     <div 
@@ -129,19 +142,40 @@
     <div class="top-meta">
       <div class="weather-display">
         <span class="weather-icon" aria-hidden="true">
-          {#if weather.condition.toLowerCase().includes('cloud')}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          {#if currentWeather.condition.toLowerCase().includes('cloud') || currentWeather.condition.toLowerCase().includes('overcast')}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
             </svg>
-          {:else if weather.condition.toLowerCase().includes('rain')}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          {:else if currentWeather.condition.toLowerCase().includes('rain') || currentWeather.condition.toLowerCase().includes('drizzle') || currentWeather.condition.toLowerCase().includes('shower')}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
               <path d="M16 14v6" />
               <path d="M8 14v6" />
               <path d="M12 16v6" />
             </svg>
-          {:else if weather.condition.toLowerCase().includes('clear') || weather.condition.toLowerCase().includes('sun')}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          {:else if currentWeather.condition.toLowerCase().includes('snow')}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25" />
+              <line x1="8" y1="16" x2="8.01" y2="16" />
+              <line x1="8" y1="20" x2="8.01" y2="20" />
+              <line x1="12" y1="18" x2="12.01" y2="18" />
+              <line x1="12" y1="22" x2="12.01" y2="22" />
+              <line x1="16" y1="16" x2="16.01" y2="16" />
+              <line x1="16" y1="20" x2="16.01" y2="20" />
+            </svg>
+          {:else if currentWeather.condition.toLowerCase().includes('thunder')}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9" />
+              <polyline points="13 11 9 17 15 17 11 23" />
+            </svg>
+          {:else if currentWeather.condition.toLowerCase().includes('fog')}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="14" x2="20" y2="14" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+              <path d="M17.5 10H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+            </svg>
+          {:else if currentWeather.condition.toLowerCase().includes('clear') || currentWeather.condition.toLowerCase().includes('sun')}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="4" />
               <path d="M12 2v2" />
               <path d="M12 20v2" />
@@ -153,14 +187,14 @@
               <path d="m19.07 4.93-1.41 1.41" />
             </svg>
           {:else}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
             </svg>
           {/if}
         </span>
-        <span class="weather-temp">{weather.temperature}{weather.unit}</span>
+        <span class="weather-temp">{currentWeather.temperature}{currentWeather.unit}</span>
         <span class="weather-dot">·</span>
-        <span class="weather-cond">{weather.condition}</span>
+        <span class="weather-cond">{currentWeather.condition}</span>
       </div>
     </div>
 
@@ -181,7 +215,6 @@
     height: 100%;
     flex-shrink: 0;
     overflow: hidden;
-    cursor: pointer;
     background-color: #1a1614;
   }
 
@@ -245,12 +278,12 @@
   .weather-display {
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
-    font-size: 1.1rem;
+    gap: 0.75rem;
+    font-size: 1.45rem;
     font-weight: 450;
-    letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.95);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 3px 12px rgba(0, 0, 0, 0.45);
+    letter-spacing: 0.01em;
+    color: rgba(255, 255, 255, 0.96);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), 0 3px 14px rgba(0, 0, 0, 0.5);
   }
 
   .weather-icon {
@@ -259,17 +292,23 @@
     justify-content: center;
   }
 
+  .weather-icon svg {
+    width: 1.65rem;
+    height: 1.65rem;
+  }
+
   .weather-temp {
     font-weight: 550;
   }
 
   .weather-dot {
     opacity: 0.5;
+    margin: 0 0.1rem;
   }
 
   .weather-cond {
-    font-weight: 350;
-    opacity: 0.9;
+    font-weight: 380;
+    opacity: 0.92;
   }
 
   .bottom-time-date {
@@ -316,6 +355,14 @@
     }
     .overlay-content {
       padding: 2rem 2.25rem;
+    }
+    .weather-display {
+      font-size: 1.25rem;
+      gap: 0.6rem;
+    }
+    .weather-icon svg {
+      width: 1.4rem;
+      height: 1.4rem;
     }
     .time-display {
       font-size: 3.6rem;
