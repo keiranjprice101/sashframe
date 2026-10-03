@@ -6,6 +6,9 @@ dist/
 
 # dependencies
 node_modules/
+.venv/
+__pycache__/
+*.pyc
 
 # logs
 npm-debug.log*
@@ -22,3 +25,10 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Photo ingestion pipeline
+data/photos/incoming/*
+!data/photos/incoming/.gitkeep
+data/photos/processed/*
+!data/photos/processed/.gitkeep
+data/photos/manifest.json

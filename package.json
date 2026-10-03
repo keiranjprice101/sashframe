@@ -6,7 +6,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "astro dev",
+    "setup": "bash scripts/install.sh",
+    "dev": "bash scripts/dev.sh",
+    "dev:astro": "astro dev",
+    "dev:photos": "bash -c 'if [ -f .venv/bin/python3 ]; then .venv/bin/python3 services/photos/processor.py; else python3 services/photos/processor.py; fi'",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
@@ -21,6 +24,7 @@
     "esbuild": true
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10"
+    "@astrojs/check": "^0.9.10",
+    "@types/node": "^26.6.4"
   }
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import type { Photo, Weather } from '../lib/types';
+  import type { Photo, PhotoManifestItem, Weather } from '../lib/types';
   import { formatDisplayDate, formatDayName, formatLiveTime } from '../lib/dates';
 
   interface Props {
@@ -15,19 +15,77 @@
     rotationIntervalMs = 60000 
   }: Props = $props();
 
+  let manifestPhotos = $state<Photo[]>([]);
+  let activePhotos = $derived(manifestPhotos.length > 0 ? manifestPhotos : photos);
+
   let currentIndex = $state(0);
   let now = $state(new Date());
 
   let timer: ReturnType<typeof setInterval>;
   let clockTimer: ReturnType<typeof setInterval>;
+  let pollTimer: ReturnType<typeof setInterval>;
 
   function nextPhoto() {
-    if (photos.length === 0) return;
-    currentIndex = (currentIndex + 1) % photos.length;
+    if (activePhotos.length <= 1) {
+      currentIndex = 0;
+      return;
+    }
+    currentIndex = (currentIndex + 1) % activePhotos.length;
+  }
+
+  async function checkPhotoManifest() {
+    try {
+      const res = await fetch('/api/photos');
+      if (!res.ok) return;
+      const data: PhotoManifestItem[] = await res.json();
+      
+      if (Array.isArray(data) && data.length > 0) {
+        const currentFingerprint = manifestPhotos.map(p => `${p.id}:${p.url}`).join('|');
+        const newFingerprint = data.map(d => `${d.id}:${d.src}`).join('|');
+        
+        if (newFingerprint !== currentFingerprint) {
+          const currentPhotoId = activePhotos[currentIndex]?.id;
+          
+          manifestPhotos = data.map(item => ({
+            id: item.id,
+            url: item.src,
+            caption: item.sourceName,
+            sourceName: item.sourceName,
+            width: item.width,
+            height: item.height
+          }));
+
+          // Preserve currently viewed photo if still present, avoid resetting index
+          if (currentPhotoId) {
+            const foundIndex = manifestPhotos.findIndex(p => p.id === currentPhotoId);
+            if (foundIndex !== -1) {
+              currentIndex = foundIndex;
+            } else if (currentIndex >= manifestPhotos.length) {
+              currentIndex = 0;
+            }
+          } else {
+            currentIndex = 0;
+          }
+        }
+      } else if (manifestPhotos.length > 0) {
+        manifestPhotos = [];
+        if (currentIndex >= photos.length) {
+          currentIndex = 0;
+        }
+      }
+    } catch (e) {
+      // Ignore network errors in local dev
+    }
   }
 
   onMount(() => {
-    // 60-second photo rotation timer
+    // Initial fetch of manifest
+    checkPhotoManifest();
+
+    // Poll manifest every 5 seconds for development hot updates
+    pollTimer = setInterval(checkPhotoManifest, 5000);
+
+    // Photo rotation timer
     timer = setInterval(() => {
       nextPhoto();
     }, rotationIntervalMs);
@@ -41,6 +99,7 @@
   onDestroy(() => {
     if (timer) clearInterval(timer);
     if (clockTimer) clearInterval(clockTimer);
+    if (pollTimer) clearInterval(pollTimer);
   });
 </script>
 
@@ -53,7 +112,7 @@
   aria-label="Tap to show next photo"
 >
   <!-- Render all photos stacked for crossfade transition -->
-  {#each photos as photo, idx (photo.id)}
+  {#each activePhotos as photo, idx (photo.id)}
     <div 
       class="photo-slide"
       class:active={idx === currentIndex}

@@ -1,0 +1,3 @@
+"""
+Photo ingestion service package.
+"""

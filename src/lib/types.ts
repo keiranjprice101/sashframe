@@ -28,9 +28,21 @@ export interface Weather {
   low?: number;
 }
 
+export interface PhotoManifestItem {
+  id: string;
+  src: string;
+  sourceName: string;
+  width: number;
+  height: number;
+  updatedAt: string;
+}
+
 export interface Photo {
   id: string;
   url: string;
-  caption: string;
+  caption?: string;
   location?: string;
+  sourceName?: string;
+  width?: number;
+  height?: number;
 }
