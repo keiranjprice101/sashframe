@@ -31,9 +31,6 @@ fi
 if [ -z "${RCLONE_REMOTE:-}" ]; then
   MISSING_VARS+=("RCLONE_REMOTE")
 fi
-if [ -z "${RCLONE_PHOTO_PATH:-}" ]; then
-  MISSING_VARS+=("RCLONE_PHOTO_PATH")
-fi
 
 if [ ${#MISSING_VARS[@]} -gt 0 ]; then
   echo "[Error] Missing required environment variables in $ENV_FILE:" >&2
@@ -63,7 +60,11 @@ fi
 # 5. Ensure local incoming directory exists
 mkdir -p "$PHOTO_INPUT_DIR"
 
-REMOTE_TARGET="${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}"
+if [ -n "${RCLONE_PHOTO_PATH:-}" ]; then
+  REMOTE_TARGET="${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}"
+else
+  REMOTE_TARGET="${RCLONE_REMOTE}:"
+fi
 echo "[Sync] Starting photo sync from '${REMOTE_TARGET}' into '${PHOTO_INPUT_DIR}'..."
 
 # 6. Execute rclone sync
