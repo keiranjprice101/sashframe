@@ -126,9 +126,9 @@ sudo ./scripts/install.sh
 ```
 
 The installer:
-1. Provisions system packages: `docker.io`, `docker-compose-plugin`, `rclone`, `python3`, `npm`, `curl`.
+1. Provisions minimal host system packages: `docker.io`, `docker-compose-plugin`, `rclone`, `curl` (host Python and Node are **not** installed since services run in Docker).
 2. Adds the application user to the `docker` group.
-3. Creates persistent host directories under `/var/lib/sashframe/` with `750` permissions.
+3. Creates persistent host directories under `/var/lib/sashframe/` with `755` permissions.
 4. Generates the central environment configuration at `/etc/sashframe/sashframe.env`.
 5. Builds Docker images tagged with the active Git commit SHA.
 6. Launches the application stack with Docker Compose.

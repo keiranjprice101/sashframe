@@ -51,24 +51,42 @@ run_as_user() {
   fi
 }
 
-# 2. System dependencies (rclone, Docker, python3, npm)
-echo "[1/8] Checking system packages..."
+# Parse arguments
+DEV_MODE=false
+for arg in "$@"; do
+  case "$arg" in
+    --dev)
+      DEV_MODE=true
+      ;;
+  esac
+done
+
+# 2. System dependencies
+if [ "$DEV_MODE" = true ]; then
+  echo "[1/6] Checking developer system packages (rclone, curl, python3, npm)..."
+else
+  echo "[1/5] Checking production system packages (rclone, curl, docker)..."
+fi
+
 if command -v apt-get >/dev/null 2>&1; then
   PACKAGES=()
   if ! command -v rclone >/dev/null 2>&1; then
     PACKAGES+=("rclone")
   fi
-  if ! command -v python3 >/dev/null 2>&1; then
-    PACKAGES+=("python3" "python3-venv" "python3-pip")
-  fi
-  if ! command -v npm >/dev/null 2>&1; then
-    PACKAGES+=("npm")
-  fi
   if ! command -v curl >/dev/null 2>&1; then
     PACKAGES+=("curl")
   fi
-  if ! command -v docker >/dev/null 2>&1; then
-    PACKAGES+=("docker.io" "docker-compose-plugin")
+  if [ "$DEV_MODE" = true ]; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      PACKAGES+=("python3" "python3-venv" "python3-pip")
+    fi
+    if ! command -v npm >/dev/null 2>&1; then
+      PACKAGES+=("npm")
+    fi
+  else
+    if ! command -v docker >/dev/null 2>&1; then
+      PACKAGES+=("docker.io" "docker-compose-plugin")
+    fi
   fi
 
   if [ ${#PACKAGES[@]} -gt 0 ]; then
@@ -95,68 +113,66 @@ if command -v systemctl >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; th
   run_as_root systemctl enable --now docker 2>/dev/null || true
 fi
 
-# Verify Python 3
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "[Error] python3 is required but was not found on PATH." >&2
-  exit 1
-fi
-
-# 3. Set up Python virtual environment (preserved for local development)
-echo "[2/8] Setting up Python virtual environment (.venv)..."
-if [ ! -d ".venv" ] || [ ! -f ".venv/bin/activate" ]; then
-  if run_as_user python3 -m venv .venv 2>/dev/null; then
-    echo "  Created virtual environment using python3 -m venv."
-  else
-    VENV_CMD=""
-    if command -v virtualenv >/dev/null 2>&1; then
-      VENV_CMD="virtualenv"
-    elif [ -x "$INSTALL_HOME/.local/bin/virtualenv" ]; then
-      VENV_CMD="$INSTALL_HOME/.local/bin/virtualenv"
-    fi
-
-    if [ -n "$VENV_CMD" ]; then
-      echo "  Falling back to $VENV_CMD..."
-      run_as_user "$VENV_CMD" .venv
+# If in DEV mode, set up Python venv and Node modules on host
+if [ "$DEV_MODE" = true ]; then
+  echo "[2/6] Setting up host Python virtual environment (.venv)..."
+  if [ ! -d ".venv" ] || [ ! -f ".venv/bin/activate" ]; then
+    if run_as_user python3 -m venv .venv 2>/dev/null; then
+      echo "  Created virtual environment using python3 -m venv."
     else
-      echo "  Attempting to install virtualenv in user space..."
-      run_as_user python3 -m pip install --user --break-system-packages virtualenv 2>/dev/null || true
-      if [ -x "$INSTALL_HOME/.local/bin/virtualenv" ]; then
-        run_as_user "$INSTALL_HOME/.local/bin/virtualenv" .venv
+      VENV_CMD=""
+      if command -v virtualenv >/dev/null 2>&1; then
+        VENV_CMD="virtualenv"
+      elif [ -x "$INSTALL_HOME/.local/bin/virtualenv" ]; then
+        VENV_CMD="$INSTALL_HOME/.local/bin/virtualenv"
+      fi
+
+      if [ -n "$VENV_CMD" ]; then
+        echo "  Falling back to $VENV_CMD..."
+        run_as_user "$VENV_CMD" .venv
       else
-        echo "[Error] Failed to create .venv. Please install python3-venv or virtualenv." >&2
-        exit 1
+        echo "  Attempting to install virtualenv in user space..."
+        run_as_user python3 -m pip install --user --break-system-packages virtualenv 2>/dev/null || true
+        if [ -x "$INSTALL_HOME/.local/bin/virtualenv" ]; then
+          run_as_user "$INSTALL_HOME/.local/bin/virtualenv" .venv
+        else
+          echo "[Error] Failed to create .venv. Please install python3-venv or virtualenv." >&2
+          exit 1
+        fi
       fi
     fi
+  else
+    echo "  Existing .venv found."
   fi
-else
-  echo "  Existing .venv found."
+
+  echo "[3/6] Installing Python dependencies from requirements.txt..."
+  if [ -f ".venv/bin/pip" ]; then
+    run_as_user .venv/bin/pip install --quiet --upgrade pip 2>/dev/null || true
+    run_as_user .venv/bin/pip install -r requirements.txt
+  fi
+
+  echo "[4/6] Installing Node dependencies via npm install..."
+  if command -v npm >/dev/null 2>&1; then
+    run_as_user npm install
+  fi
+
+  if [ "${EUID:-$(id -u)}" -eq 0 ] && [ "$INSTALL_USER" != "root" ]; then
+    chown -R "$INSTALL_USER:$INSTALL_USER" "$ROOT_DIR/.venv" "$ROOT_DIR/node_modules" 2>/dev/null || true
+  fi
+
+  # Ensure repo-local development directories exist
+  mkdir -p "$ROOT_DIR/data/photos/incoming" "$ROOT_DIR/data/photos/processed"
+
+  echo ""
+  echo "=========================================="
+  echo " Developer setup complete!"
+  echo " Run 'npm run dev' to start development."
+  echo "=========================================="
+  exit 0
 fi
 
-# 4. Install Python dependencies
-echo "[3/8] Installing Python dependencies from requirements.txt..."
-if [ -f ".venv/bin/pip" ]; then
-  run_as_user .venv/bin/pip install --quiet --upgrade pip 2>/dev/null || true
-  run_as_user .venv/bin/pip install -r requirements.txt
-else
-  echo "[Error] .venv/bin/pip not found." >&2
-  exit 1
-fi
-
-# 5. Install Node dependencies
-echo "[4/8] Installing Node dependencies via npm install..."
-if ! command -v npm >/dev/null 2>&1; then
-  echo "[Error] npm is required but was not found on PATH." >&2
-  exit 1
-fi
-run_as_user npm install
-
-# Fix repo ownership if run as root
-if [ "${EUID:-$(id -u)}" -eq 0 ] && [ "$INSTALL_USER" != "root" ]; then
-  chown -R "$INSTALL_USER:$INSTALL_USER" "$ROOT_DIR/.venv" "$ROOT_DIR/node_modules" 2>/dev/null || true
-fi
-
-# 6. Runtime directories
-echo "[5/8] Setting up runtime directories (/var/lib/sashframe)..."
+# 3. Runtime directories
+echo "[2/5] Setting up runtime directories (/var/lib/sashframe)..."
 RUNTIME_DIRS=(
   "/var/lib/sashframe"
   "/var/lib/sashframe/photos"
@@ -185,8 +201,8 @@ fi
 run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "/var/lib/sashframe"
 run_as_root chmod 755 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
 
-# 7. Central environment file
-echo "[6/8] Configuring central environment file (/etc/sashframe/sashframe.env)..."
+# 4. Central environment file
+echo "[3/5] Configuring central environment file (/etc/sashframe/sashframe.env)..."
 run_as_root mkdir -p "/etc/sashframe"
 run_as_root chmod 755 "/etc/sashframe"
 
@@ -228,8 +244,8 @@ chmod +x "$ROOT_DIR/scripts/sync-photos.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/update.sh" 2>/dev/null || true
 
-# 8. Install systemd units
-echo "[7/8] Installing host systemd units..."
+# 5. Install systemd units
+echo "[4/5] Installing host systemd units..."
 SYSTEMD_DIR="/etc/systemd/system"
 if [ -d "$SYSTEMD_DIR" ]; then
   install_unit() {
@@ -258,8 +274,8 @@ if [ -d "$SYSTEMD_DIR" ]; then
   fi
 fi
 
-# 9. Build Docker images & start Compose stack
-echo "[8/8] Building and starting Docker Compose services..."
+# 6. Build Docker images & start Compose stack
+echo "[5/5] Building and starting Docker Compose services..."
 COMPOSE_CMD=()
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   COMPOSE_CMD=(docker compose)

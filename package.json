@@ -6,7 +6,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "setup": "bash scripts/install.sh",
+    "setup": "bash scripts/install.sh --dev",
     "dev": "bash scripts/dev.sh",
     "dev:astro": "astro dev",
     "dev:photos": "bash -c 'if [ -f .venv/bin/python3 ]; then .venv/bin/python3 services/photos/processor.py; else python3 services/photos/processor.py; fi'",
