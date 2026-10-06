@@ -11,16 +11,24 @@ echo "=========================================="
 
 # 1. Detect application user and home directory
 INSTALL_USER="${SUDO_USER:-$USER}"
-if [ -z "$INSTALL_USER" ]; then
-  INSTALL_USER="$(id -un 2>/dev/null || whoami 2>/dev/null || echo "pi")"
+if [ -z "$INSTALL_USER" ] || [ "$INSTALL_USER" = "root" ]; then
+  REGULAR_USER="$(awk -F: '$3 >= 1000 && $3 < 60000 {print $1; exit}' /etc/passwd 2>/dev/null || true)"
+  if [ -n "$REGULAR_USER" ]; then
+    INSTALL_USER="$REGULAR_USER"
+  else
+    INSTALL_USER="$(id -un 2>/dev/null || whoami 2>/dev/null || echo "pi")"
+  fi
 fi
+
+INSTALL_UID="$(id -u "$INSTALL_USER" 2>/dev/null || echo 1000)"
+INSTALL_GID="$(id -g "$INSTALL_USER" 2>/dev/null || echo 1000)"
 
 INSTALL_HOME="$(getent passwd "$INSTALL_USER" 2>/dev/null | cut -d: -f6 || true)"
 if [ -z "$INSTALL_HOME" ] || [ ! -d "$INSTALL_HOME" ]; then
   INSTALL_HOME="${HOME:-/home/$INSTALL_USER}"
 fi
 
-echo "Application user: $INSTALL_USER"
+echo "Application user: $INSTALL_USER (UID: $INSTALL_UID, GID: $INSTALL_GID)"
 echo "User home:        $INSTALL_HOME"
 
 # Execution helpers for root vs non-root context
@@ -175,7 +183,7 @@ if [ -d "/var/lib/home-calendar/photos" ] && [ ! -f "/var/lib/sashframe/photos/m
 fi
 
 run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "/var/lib/sashframe"
-run_as_root chmod 750 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
+run_as_root chmod 755 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
 
 # 7. Central environment file
 echo "[6/8] Configuring central environment file (/etc/sashframe/sashframe.env)..."
@@ -194,6 +202,9 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "  Creating $ENV_FILE with default production settings..."
     run_as_root bash -c "cat << EOF > '$ENV_FILE'
 # Sashframe Environment Configuration
+PUID=${INSTALL_UID}
+PGID=${INSTALL_GID}
+
 PHOTO_INPUT_DIR=/var/lib/sashframe/photos/incoming
 PHOTO_OUTPUT_DIR=/var/lib/sashframe/photos/processed
 PHOTO_MANIFEST=/var/lib/sashframe/photos/manifest.json
@@ -207,7 +218,7 @@ RCLONE_CONFIG=${INSTALL_HOME}/.config/rclone/rclone.conf
 EOF"
   fi
   run_as_root chown "$INSTALL_USER:$INSTALL_USER" "$ENV_FILE"
-  run_as_root chmod 640 "$ENV_FILE"
+  run_as_root chmod 644 "$ENV_FILE"
 else
   echo "  Existing $ENV_FILE found. Preserving user configuration."
 fi

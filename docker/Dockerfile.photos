@@ -10,6 +10,11 @@ ENV PYTHONUNBUFFERED=1 \
     PHOTO_MAX_SIZE=1920 \
     PHOTO_QUALITY=85
 
+# Install gosu for root-to-unprivileged user privilege dropping
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -17,9 +22,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN groupadd -g 1000 appuser \
     && useradd -u 1000 -g appuser -m -s /bin/bash appuser
 
-# Copy photo processing service code
+# Copy photo processing service code and entrypoint
 COPY services/ ./services/
+COPY docker/entrypoint-photos.sh ./docker/entrypoint-photos.sh
+RUN chmod +x ./docker/entrypoint-photos.sh
 
-USER 1000:1000
-
+ENTRYPOINT ["/app/docker/entrypoint-photos.sh"]
 CMD ["python3", "services/photos/processor.py"]

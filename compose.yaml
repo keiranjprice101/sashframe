@@ -12,6 +12,8 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=4321
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - PHOTO_OUTPUT_DIR=/data/photos/processed
       - PHOTO_MANIFEST=/data/photos/manifest.json
     volumes:
@@ -34,6 +36,8 @@ services:
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - PHOTO_INPUT_DIR=/data/photos/incoming
       - PHOTO_OUTPUT_DIR=/data/photos/processed
       - PHOTO_MANIFEST=/data/photos/manifest.json

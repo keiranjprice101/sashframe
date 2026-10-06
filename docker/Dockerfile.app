@@ -23,9 +23,9 @@ FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Install curl for healthcheck and tini for clean PID 1 signal handling
+# Install curl for healthcheck, tini for signal handling, and gosu for dropping privileges
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl tini \
+    && apt-get install -y --no-install-recommends curl tini gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Install production dependencies only
@@ -35,6 +35,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy built server and client assets from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
+
+# Copy entrypoint script
+COPY docker/entrypoint-app.sh ./docker/entrypoint-app.sh
+RUN chmod +x ./docker/entrypoint-app.sh
 
 # Set production environment variables
 ENV NODE_ENV=production \
@@ -47,8 +51,5 @@ EXPOSE 4321
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -fsS http://127.0.0.1:4321/health || exit 1
 
-# Run as non-root user
-USER node
-
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker/entrypoint-app.sh"]
 CMD ["node", "./dist/server/entry.mjs"]

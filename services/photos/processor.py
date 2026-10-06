@@ -221,9 +221,24 @@ def main() -> None:
     max_dimension: int = args.max_size
     quality: int = args.quality
 
-    incoming_dir.mkdir(parents=True, exist_ok=True)
-    processed_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        incoming_dir.mkdir(parents=True, exist_ok=True)
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError as e:
+        logger.warning(
+            "Could not create directories via mkdir (%s). Checking if they already exist...", e
+        )
+        if not (incoming_dir.is_dir() and processed_dir.is_dir()):
+            logger.error(
+                "Required photo directories do not exist and could not be created: incoming=%s, processed=%s. "
+                "Ensure parent directory '%s' has appropriate write permissions for UID %s.",
+                incoming_dir,
+                processed_dir,
+                incoming_dir.parent,
+                os.getuid(),
+            )
+            raise
 
     logger.info("Starting Photo Ingestion Watcher")
     logger.info("  Incoming:  %s", incoming_dir)
