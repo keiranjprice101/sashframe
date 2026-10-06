@@ -24,7 +24,16 @@ if ! command -v rclone >/dev/null 2>&1; then
 fi
 
 # 3. Source environment configuration if present
-ENV_FILE="${ENV_FILE:-/etc/home-calendar/home-calendar.env}"
+if [ -z "${ENV_FILE:-}" ]; then
+  if [ -f "/etc/sashframe/sashframe.env" ]; then
+    ENV_FILE="/etc/sashframe/sashframe.env"
+  elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
+    ENV_FILE="/etc/home-calendar/home-calendar.env"
+  else
+    ENV_FILE="/etc/sashframe/sashframe.env"
+  fi
+fi
+
 if [ -f "$ENV_FILE" ]; then
   # Source without failing if file has root permissions and user has read access
   if [ -r "$ENV_FILE" ]; then
@@ -39,7 +48,7 @@ fi
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
 RCLONE_PHOTO_PATH="${RCLONE_PHOTO_PATH:-Calendar Photos}"
-PHOTO_INPUT_DIR="${PHOTO_INPUT_DIR:-/var/lib/home-calendar/photos/incoming}"
+PHOTO_INPUT_DIR="${PHOTO_INPUT_DIR:-/var/lib/sashframe/photos/incoming}"
 RCLONE_CONFIG="${RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 
 echo "============================================================="
@@ -159,12 +168,21 @@ echo ""
 echo "Activating automated photo sync service and timer via systemctl..."
 if command -v systemctl >/dev/null 2>&1; then
   sudo systemctl daemon-reload
-  sudo systemctl enable --now home-calendar-photo-sync.timer
-  echo ""
-  echo "============================================================="
-  echo " Systemd Timer Status:"
-  echo "============================================================="
-  systemctl status home-calendar-photo-sync.timer --no-pager || true
+  if [ -f "/etc/systemd/system/sashframe-photo-sync.timer" ]; then
+    sudo systemctl enable --now sashframe-photo-sync.timer
+    echo ""
+    echo "============================================================="
+    echo " Systemd Timer Status:"
+    echo "============================================================="
+    systemctl status sashframe-photo-sync.timer --no-pager || true
+  else
+    sudo systemctl enable --now home-calendar-photo-sync.timer
+    echo ""
+    echo "============================================================="
+    echo " Systemd Timer Status:"
+    echo "============================================================="
+    systemctl status home-calendar-photo-sync.timer --no-pager || true
+  fi
 else
   echo "[Notice] systemctl not found (non-systemd environment). Skipping timer activation."
 fi

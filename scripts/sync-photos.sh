@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FILE="${ENV_FILE:-/etc/home-calendar/home-calendar.env}"
+if [ -z "${ENV_FILE:-}" ]; then
+  if [ -f "/etc/sashframe/sashframe.env" ]; then
+    ENV_FILE="/etc/sashframe/sashframe.env"
+  elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
+    ENV_FILE="/etc/home-calendar/home-calendar.env"
+  else
+    ENV_FILE="/etc/sashframe/sashframe.env"
+  fi
+fi
 
 # 1. Source environment file if present, or fail clearly
 if [ -f "$ENV_FILE" ]; then

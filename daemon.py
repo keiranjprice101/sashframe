@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Sashframe - Parent Production Supervisor Daemon
+Sashframe - Parent Production Supervisor Daemon (Legacy Fallback)
 
-Handles complete lifecycle management:
-1. Environment verification (validates .venv, dependencies, node_modules, self-heals via install.sh).
-2. Production build verification (ensures dist/index.html is compiled).
-3. Port conflict resolution (cleanly stops conflicting dev servers if running).
-4. Subprocess supervision for:
-   - Photo ingestion pipeline (services/photos/processor.py)
-   - Production Astro web server (astro preview)
-5. Robust signal handling, automated restarts, and CLI controls (start, stop, status, restart, logs).
+[DEPRECATION NOTICE]
+Docker Compose is now the primary production supervisor for Sashframe:
+  docker compose up -d
+  docker compose ps
+  docker compose logs -f
+  docker compose down
+
+This script is retained for backwards compatibility and local standalone testing
+without Docker.
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ def load_env_file(path: Path) -> None:
         pass
 
 
+load_env_file(Path("/etc/sashframe/sashframe.env"))
 load_env_file(Path("/etc/home-calendar/home-calendar.env"))
 
 # Base Paths

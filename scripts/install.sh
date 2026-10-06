@@ -43,8 +43,8 @@ run_as_user() {
   fi
 }
 
-# 2. System dependencies (rclone, python3, npm)
-echo "[1/6] Checking system packages..."
+# 2. System dependencies (rclone, Docker, python3, npm)
+echo "[1/8] Checking system packages..."
 if command -v apt-get >/dev/null 2>&1; then
   PACKAGES=()
   if ! command -v rclone >/dev/null 2>&1; then
@@ -55,6 +55,12 @@ if command -v apt-get >/dev/null 2>&1; then
   fi
   if ! command -v npm >/dev/null 2>&1; then
     PACKAGES+=("npm")
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    PACKAGES+=("curl")
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    PACKAGES+=("docker.io" "docker-compose-plugin")
   fi
 
   if [ ${#PACKAGES[@]} -gt 0 ]; then
@@ -68,14 +74,27 @@ elif ! command -v rclone >/dev/null 2>&1; then
   echo "  [Warning] rclone is not installed. Please install rclone manually." >&2
 fi
 
+# Ensure user is in docker group if docker exists
+if getent group docker >/dev/null 2>&1; then
+  if ! id -nG "$INSTALL_USER" | grep -qw docker; then
+    echo "  Adding user '$INSTALL_USER' to docker group..."
+    run_as_root usermod -aG docker "$INSTALL_USER" 2>/dev/null || true
+  fi
+fi
+
+# Ensure Docker daemon is enabled and running
+if command -v systemctl >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
+  run_as_root systemctl enable --now docker 2>/dev/null || true
+fi
+
 # Verify Python 3
 if ! command -v python3 >/dev/null 2>&1; then
   echo "[Error] python3 is required but was not found on PATH." >&2
   exit 1
 fi
 
-# 3. Set up Python virtual environment
-echo "[2/6] Setting up Python virtual environment (.venv)..."
+# 3. Set up Python virtual environment (preserved for local development)
+echo "[2/8] Setting up Python virtual environment (.venv)..."
 if [ ! -d ".venv" ] || [ ! -f ".venv/bin/activate" ]; then
   if run_as_user python3 -m venv .venv 2>/dev/null; then
     echo "  Created virtual environment using python3 -m venv."
@@ -106,7 +125,7 @@ else
 fi
 
 # 4. Install Python dependencies
-echo "[3/6] Installing Python dependencies from requirements.txt..."
+echo "[3/8] Installing Python dependencies from requirements.txt..."
 if [ -f ".venv/bin/pip" ]; then
   run_as_user .venv/bin/pip install --quiet --upgrade pip 2>/dev/null || true
   run_as_user .venv/bin/pip install -r requirements.txt
@@ -116,7 +135,7 @@ else
 fi
 
 # 5. Install Node dependencies
-echo "[4/6] Installing Node dependencies via npm install..."
+echo "[4/8] Installing Node dependencies via npm install..."
 if ! command -v npm >/dev/null 2>&1; then
   echo "[Error] npm is required but was not found on PATH." >&2
   exit 1
@@ -129,12 +148,15 @@ if [ "${EUID:-$(id -u)}" -eq 0 ] && [ "$INSTALL_USER" != "root" ]; then
 fi
 
 # 6. Runtime directories
-echo "[5/6] Setting up runtime directories..."
+echo "[5/8] Setting up runtime directories (/var/lib/sashframe)..."
 RUNTIME_DIRS=(
-  "/var/lib/home-calendar"
-  "/var/lib/home-calendar/photos"
-  "/var/lib/home-calendar/photos/incoming"
-  "/var/lib/home-calendar/photos/processed"
+  "/var/lib/sashframe"
+  "/var/lib/sashframe/photos"
+  "/var/lib/sashframe/photos/incoming"
+  "/var/lib/sashframe/photos/processed"
+  "/var/lib/sashframe/calendar"
+  "/var/lib/sashframe/state"
+  "/var/lib/sashframe/database"
 )
 
 for dir in "${RUNTIME_DIRS[@]}"; do
@@ -144,22 +166,37 @@ for dir in "${RUNTIME_DIRS[@]}"; do
   fi
 done
 
-run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "/var/lib/home-calendar"
-run_as_root chmod 750 "/var/lib/home-calendar" "/var/lib/home-calendar/photos" "/var/lib/home-calendar/photos/incoming" "/var/lib/home-calendar/photos/processed"
+# Migration: copy existing photos from legacy path /var/lib/home-calendar if present
+if [ -d "/var/lib/home-calendar/photos" ] && [ ! -f "/var/lib/sashframe/photos/manifest.json" ]; then
+  if [ -f "/var/lib/home-calendar/photos/manifest.json" ]; then
+    echo "  Migrating legacy photos from /var/lib/home-calendar to /var/lib/sashframe..."
+    run_as_root cp -rn /var/lib/home-calendar/photos/* /var/lib/sashframe/photos/ 2>/dev/null || true
+  fi
+fi
+
+run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "/var/lib/sashframe"
+run_as_root chmod 750 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
 
 # 7. Central environment file
-echo "[6/6] Configuring central environment file..."
-run_as_root mkdir -p "/etc/home-calendar"
-run_as_root chmod 755 "/etc/home-calendar"
+echo "[6/8] Configuring central environment file (/etc/sashframe/sashframe.env)..."
+run_as_root mkdir -p "/etc/sashframe"
+run_as_root chmod 755 "/etc/sashframe"
 
-ENV_FILE="/etc/home-calendar/home-calendar.env"
+ENV_FILE="/etc/sashframe/sashframe.env"
+LEGACY_ENV="/etc/home-calendar/home-calendar.env"
+
 if [ ! -f "$ENV_FILE" ]; then
-  echo "  Creating $ENV_FILE with default settings..."
-  run_as_root bash -c "cat << EOF > '$ENV_FILE'
+  if [ -f "$LEGACY_ENV" ]; then
+    echo "  Migrating existing configuration from $LEGACY_ENV to $ENV_FILE..."
+    run_as_root sed -e 's|/var/lib/home-calendar|/var/lib/sashframe|g' "$LEGACY_ENV" > "/tmp/sashframe.env"
+    run_as_root mv "/tmp/sashframe.env" "$ENV_FILE"
+  else
+    echo "  Creating $ENV_FILE with default production settings..."
+    run_as_root bash -c "cat << EOF > '$ENV_FILE'
 # Sashframe Environment Configuration
-PHOTO_INPUT_DIR=/var/lib/home-calendar/photos/incoming
-PHOTO_OUTPUT_DIR=/var/lib/home-calendar/photos/processed
-PHOTO_MANIFEST=/var/lib/home-calendar/photos/manifest.json
+PHOTO_INPUT_DIR=/var/lib/sashframe/photos/incoming
+PHOTO_OUTPUT_DIR=/var/lib/sashframe/photos/processed
+PHOTO_MANIFEST=/var/lib/sashframe/photos/manifest.json
 PHOTO_MAX_SIZE=1920
 PHOTO_QUALITY=85
 
@@ -168,41 +205,79 @@ RCLONE_PHOTO_PATH=\"Calendar Photos\"
 
 RCLONE_CONFIG=${INSTALL_HOME}/.config/rclone/rclone.conf
 EOF"
+  fi
   run_as_root chown "$INSTALL_USER:$INSTALL_USER" "$ENV_FILE"
   run_as_root chmod 640 "$ENV_FILE"
 else
   echo "  Existing $ENV_FILE found. Preserving user configuration."
 fi
 
-# 8. Install systemd units
-SYSTEMD_DIR="/etc/systemd/system"
-if [ -d "$SYSTEMD_DIR" ]; then
-  echo "  Registering systemd units..."
-  SERVICE_SRC="$ROOT_DIR/systemd/home-calendar-photo-sync.service"
-  SERVICE_DEST="$SYSTEMD_DIR/home-calendar-photo-sync.service"
-  if [ -f "$SERVICE_SRC" ]; then
-    run_as_root sed -e "s|@INSTALL_USER@|$INSTALL_USER|g" -e "s|@REPO_ROOT@|$ROOT_DIR|g" "$SERVICE_SRC" > "/tmp/home-calendar-photo-sync.service"
-    run_as_root mv "/tmp/home-calendar-photo-sync.service" "$SERVICE_DEST"
-    run_as_root chmod 644 "$SERVICE_DEST"
-  fi
-
-  TIMER_SRC="$ROOT_DIR/systemd/home-calendar-photo-sync.timer"
-  TIMER_DEST="$SYSTEMD_DIR/home-calendar-photo-sync.timer"
-  if [ -f "$TIMER_SRC" ]; then
-    run_as_root cp "$TIMER_SRC" "$TIMER_DEST"
-    run_as_root chmod 644 "$TIMER_DEST"
-  fi
-
-  if command -v systemctl >/dev/null 2>&1; then
-    run_as_root systemctl daemon-reload
-  fi
-fi
-
 # Ensure helper scripts are executable
 chmod +x "$ROOT_DIR/scripts/sync-photos.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive.sh" 2>/dev/null || true
+chmod +x "$ROOT_DIR/scripts/update.sh" 2>/dev/null || true
 
-# 9. Check Google Drive rclone configuration
+# 8. Install systemd units
+echo "[7/8] Installing host systemd units..."
+SYSTEMD_DIR="/etc/systemd/system"
+if [ -d "$SYSTEMD_DIR" ]; then
+  install_unit() {
+    local src="$1"
+    local dest="$2"
+    if [ -f "$src" ]; then
+      run_as_root sed -e "s|@INSTALL_USER@|$INSTALL_USER|g" -e "s|@REPO_ROOT@|$ROOT_DIR|g" "$src" > "/tmp/$(basename "$dest")"
+      run_as_root mv "/tmp/$(basename "$dest")" "$dest"
+      run_as_root chmod 644 "$dest"
+    fi
+  }
+
+  install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.service" "$SYSTEMD_DIR/sashframe-photo-sync.service"
+  install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.timer" "$SYSTEMD_DIR/sashframe-photo-sync.timer"
+  install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
+  install_unit "$ROOT_DIR/systemd/sashframe-updater.timer" "$SYSTEMD_DIR/sashframe-updater.timer"
+
+  # Maintain legacy units for compatibility
+  install_unit "$ROOT_DIR/systemd/home-calendar-photo-sync.service" "$SYSTEMD_DIR/home-calendar-photo-sync.service"
+  install_unit "$ROOT_DIR/systemd/home-calendar-photo-sync.timer" "$SYSTEMD_DIR/home-calendar-photo-sync.timer"
+
+  if command -v systemctl >/dev/null 2>&1; then
+    run_as_root systemctl daemon-reload
+    # Enable updater timer by default
+    run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
+  fi
+fi
+
+# 9. Build Docker images & start Compose stack
+echo "[8/8] Building and starting Docker Compose services..."
+COMPOSE_CMD=()
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker-compose)
+elif command -v podman-compose >/dev/null 2>&1; then
+  COMPOSE_CMD=(podman-compose)
+elif [ -x "$ROOT_DIR/.venv/bin/podman-compose" ]; then
+  COMPOSE_CMD=("$ROOT_DIR/.venv/bin/podman-compose")
+fi
+
+if [ ${#COMPOSE_CMD[@]} -gt 0 ]; then
+  GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
+  echo "  Building Docker images tagged '${GIT_SHA}'..."
+  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" build
+
+  echo "  Starting Sashframe production containers..."
+  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" up -d
+
+  # Record initially deployed SHA
+  run_as_root mkdir -p /var/lib/sashframe/state
+  run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" /var/lib/sashframe/state
+  echo "$GIT_SHA" | run_as_user tee /var/lib/sashframe/state/deployed-sha >/dev/null || true
+  echo "  Docker Compose stack is running."
+else
+  echo "  [Warning] Docker Compose not found. Skipping initial container launch."
+fi
+
+# 10. Check Google Drive rclone configuration
 echo ""
 echo "=========================================="
 echo " Checking Google Drive Photo Sync Status"
@@ -235,18 +310,22 @@ fi
 if [ "$GDRIVE_READY" = true ]; then
   if command -v systemctl >/dev/null 2>&1; then
     echo "Enabling and starting Google Drive photo sync timer..."
-    run_as_root systemctl enable --now home-calendar-photo-sync.timer 2>/dev/null || true
+    run_as_root systemctl enable --now sashframe-photo-sync.timer 2>/dev/null || true
   fi
   echo ""
   echo "=========================================="
   echo " Setup complete!"
   echo " Google Drive photo sync is ACTIVE."
+  echo " Docker application services are RUNNING."
+  echo " Auto-updater timer is ACTIVE."
   echo "=========================================="
 else
   echo "Google Drive remote '${REMOTE_NAME}:' is not configured yet."
   echo ""
   echo "=========================================="
   echo " Setup complete!"
+  echo " Docker application services are RUNNING."
+  echo " Auto-updater timer is ACTIVE."
   echo ""
   echo " NEXT STEP: Configure Google Drive photo sync"
   echo " Run the setup helper script as '$INSTALL_USER':"
