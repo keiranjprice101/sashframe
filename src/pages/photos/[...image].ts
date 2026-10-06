@@ -2,8 +2,19 @@ import type { APIRoute, GetStaticPaths } from 'astro';
 import fs from 'node:fs';
 import path from 'node:path';
 
+function getProcessedDir(): string {
+  if (process.env.PHOTO_OUTPUT_DIR && fs.existsSync(process.env.PHOTO_OUTPUT_DIR)) {
+    return process.env.PHOTO_OUTPUT_DIR;
+  }
+  const systemDir = '/var/lib/home-calendar/photos/processed';
+  if (fs.existsSync(systemDir)) {
+    return systemDir;
+  }
+  return path.resolve('data/photos/processed');
+}
+
 export const getStaticPaths: GetStaticPaths = async () => {
-  const processedDir = path.resolve('data/photos/processed');
+  const processedDir = getProcessedDir();
   if (!fs.existsSync(processedDir)) return [];
   const files = fs.readdirSync(processedDir);
   return files.filter((f: string) => !f.startsWith('.')).map((file: string) => ({
@@ -17,7 +28,8 @@ export const GET: APIRoute = async ({ params }) => {
   
   // Security: prevent directory traversal
   const cleanImageName = path.basename(imageName);
-  const filePath = path.resolve('data/photos/processed', cleanImageName);
+  const processedDir = getProcessedDir();
+  const filePath = path.resolve(processedDir, cleanImageName);
   
   if (!fs.existsSync(filePath)) {
     return new Response('Not found', { status: 404 });

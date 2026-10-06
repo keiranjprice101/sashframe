@@ -9,7 +9,7 @@ export const HOUSEHOLD_MEMBERS: Record<string, HouseholdMember> = {
     bgColor: '#FDF2EE',
     borderColor: '#F5C6BA',
     textColor: '#8C311E',
-    initials: 'S'
+    initials: 'A'
   },
   sham: {
     id: 'sham',

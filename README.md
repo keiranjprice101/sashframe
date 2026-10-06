@@ -57,7 +57,7 @@ It features a horizontal layout inspired by a traditional photo calendar, with a
 
 - **Framework**: [Astro 5](https://astro.build) + [Svelte 5](https://svelte.dev) (runes-based reactive components)
 - **Language**: TypeScript
-- **Styling**: Scoped CSS with centralized CSS custom property tokens (`:root` and `html[data-theme="dark"]` in [`src/styles/global.css`](file:///home/sham/sashframe/src/styles/global.css))
+- **Styling**: Scoped CSS with centralized CSS custom property tokens (`:root` and `html[data-theme="dark"]` in [`src/styles/global.css`](src/styles/global.css))
 - **Typography**: System font stack (`system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`)
 - **Touch Accessibility**: Touch targets ≥ 44px with subtle active/hover states and native touch manipulation resets.
 - **Zero Heavy Dependencies**: Pure Astro and Svelte with zero runtime component libraries or heavy icon packs.
@@ -118,7 +118,32 @@ npm run setup
 
 *(Alternatively, manual setup: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && npm install`)*
 
-### 3. Start Development Environment
+### 2. Production Daemon (Parent Supervisor)
+Run the parent Python supervisor daemon to manage all production services:
+```bash
+# Start production daemon in background
+python3 daemon.py start
+# or: npm start
+
+# Inspect status of daemon, port, and subsystems
+python3 daemon.py status
+
+# Stream live supervisor logs
+python3 daemon.py logs
+
+# Stop production daemon and child processes
+python3 daemon.py stop
+```
+
+The daemon automatically:
+- **Verifies Prerequisites**: Validates `.venv`, Python packages (`watchdog`, `Pillow`), and `node_modules`. If missing or incomplete, auto-heals by running `scripts/install.sh`.
+- **Verifies Production Build**: Checks for `dist/index.html`; compiles with `npm run build` if missing.
+- **Resolves Port Conflicts**: Safely stops conflicting background servers on port `4321`.
+- **Supervises Image Processor**: Runs the watchdog pipeline in the background and auto-restarts upon unexpected exit.
+- **Supervises Production Astro Server**: Serves the production build via `astro preview` at `http://localhost:4321`.
+- **Foreground / systemd Support**: Supports running in foreground (`python3 daemon.py start -f`) for systemd unit integration.
+
+### 3. Start Development Environment (Dev Mode)
 Run a single command from the project root:
 ```bash
 npm run dev
@@ -155,10 +180,67 @@ npx astro check
 
 ---
 
+### 5. Raspberry Pi Provisioning & Google Drive Photo Sync
+Provisioning a Raspberry Pi display with automatic Google Drive photo syncing is fully automated, with Google OAuth as the only interactive step:
+
+#### Step 1: Clone & Run System Install
+Run the installer with `sudo`. It installs system packages (`rclone`), creates runtime directories, configures `/etc/home-calendar/home-calendar.env`, and registers systemd timer units:
+```bash
+git clone <repo-url>
+cd sashframe
+sudo ./scripts/install.sh
+```
+The installer detects the non-root application user, configures directory ownership (`/var/lib/home-calendar/photos/` with `750` permissions), and prompts you to configure Google Drive.
+
+#### Step 2: Configure Google Drive (Non-Root Helper)
+Run the guided setup helper as your regular user (not root):
+```bash
+./scripts/setup-google-drive.sh
+```
+This helper:
+1. Launches `rclone config` to authorize remote `gdrive` (Google Drive OAuth).
+2. Verifies root access and checks for the configured folder (default: `Calendar Photos`).
+3. Runs an initial test sync into `/var/lib/home-calendar/photos/incoming/`.
+4. Enables and activates the systemd timer:
+   ```bash
+   systemctl status home-calendar-photo-sync.timer
+   ```
+
+#### Photo Pipeline Architecture
+```text
+Google Drive ("Calendar Photos")
+    ↓
+rclone sync (systemd timer: every 5 min)
+    ↓
+/var/lib/home-calendar/photos/incoming
+    ↓
+Python Watchdog / inotify Processor
+    ↓
+/var/lib/home-calendar/photos/processed (<hash>.webp)
+    ↓
+manifest.json
+    ↓
+Astro Frontend (/api/photos)
+```
+
+The Google Drive source remains completely decoupled from the local photo processor. The processor only monitors the local incoming directory.
+
+#### Manual Sync & Status Inspection
+- Run a manual photo sync anytime:
+  ```bash
+  bash scripts/sync-photos.sh
+  ```
+- Check sync logs via journalctl:
+  ```bash
+  journalctl -u home-calendar-photo-sync.service -n 50 --no-pager
+  ```
+
+---
+
 ## 📋 TODO & Roadmap
 
 ### 🔄 Photo Pipeline & Integrations
-- [ ] **Google Drive / rclone Sync**: Upstream sync step to periodically mirror a shared Google Drive album into `data/photos/incoming/`.
+- [x] **Google Drive / rclone Sync**: Automated Raspberry Pi provisioning, systemd sync timer, and guided OAuth helper.
 - [ ] **HEIC / HEIF Format Support**: Add `pillow-heif` support once system libraries (`libheif`) are available.
 - [ ] **Local Photo Reader**: Integration with Immich or local network folder (Syncthing/SMB).
 

@@ -32,3 +32,7 @@ data/photos/incoming/*
 data/photos/processed/*
 !data/photos/processed/.gitkeep
 data/photos/manifest.json
+
+# Daemon runtime state
+data/daemon.log
+data/daemon.pid

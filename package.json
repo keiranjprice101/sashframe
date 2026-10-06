@@ -12,6 +12,8 @@
     "dev:photos": "bash -c 'if [ -f .venv/bin/python3 ]; then .venv/bin/python3 services/photos/processor.py; else python3 services/photos/processor.py; fi'",
     "build": "astro build",
     "preview": "astro preview",
+    "start": "python3 daemon.py",
+    "daemon": "python3 daemon.py",
     "astro": "astro"
   },
   "dependencies": {

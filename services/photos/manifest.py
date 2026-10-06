@@ -14,6 +14,7 @@ from typing import Any, Optional
 from .processing import is_supported_file, process_image
 
 logger = logging.getLogger("photos.manifest")
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def load_manifest(manifest_path: Path) -> list[dict[str, Any]]:
@@ -31,7 +32,7 @@ def load_manifest(manifest_path: Path) -> list[dict[str, Any]]:
 
 
 def save_manifest(manifest_path: Path, items: list[dict[str, Any]]) -> None:
-    """Atomically write manifest items to JSON."""
+    """Atomically write manifest items to JSON, and sync to dist/ if present."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = manifest_path.parent / f".tmp_{manifest_path.name}"
 
@@ -48,11 +49,25 @@ def save_manifest(manifest_path: Path, items: list[dict[str, Any]]) -> None:
             except OSError:
                 pass
 
+    # If production build dist/ directory exists, sync manifest there too
+    dist_manifest = REPO_ROOT / "dist" / "api" / "photos"
+    if dist_manifest.parent.exists() and dist_manifest.parent.is_dir():
+        try:
+            temp_dist = dist_manifest.parent / f".tmp_{dist_manifest.name}"
+            with open(temp_dist, "w", encoding="utf-8") as f:
+                json.dump(items, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            os.replace(temp_dist, dist_manifest)
+        except Exception as e:
+            logger.warning("Could not sync manifest to %s: %s", dist_manifest, e)
+
 
 def reconcile_manifest(
     incoming_dir: Path,
     processed_dir: Path,
     manifest_path: Path,
+    max_dimension: int = 1920,
+    quality: int = 85,
 ) -> list[dict[str, Any]]:
     """
     Scan incoming directory, process any new or modified images, remove deleted entries,
@@ -79,7 +94,7 @@ def reconcile_manifest(
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for file_path in incoming_files:
-        meta = process_image(file_path, processed_dir)
+        meta = process_image(file_path, processed_dir, max_dimension=max_dimension, quality=quality)
         if meta is None:
             # Skip invalid or corrupt images without failing the whole batch
             continue
@@ -114,7 +129,29 @@ def reconcile_manifest(
                 except OSError as e:
                     logger.warning("Could not delete orphan '%s': %s", p.name, e)
 
-    # 4. Save updated manifest
+    # 4. Sync processed webp images into dist/photos/ if dist/ exists
+    dist_photos_dir = REPO_ROOT / "dist" / "photos"
+    if dist_photos_dir.exists() and dist_photos_dir.is_dir():
+        import shutil
+        for fn in active_filenames:
+            src = processed_dir / fn
+            dst = dist_photos_dir / fn
+            if src.exists() and not dst.exists():
+                try:
+                    shutil.copy2(src, dst)
+                    logger.info("Synced photo to production dist: %s", fn)
+                except Exception as e:
+                    logger.warning("Could not sync photo to %s: %s", dst, e)
+
+        for p in dist_photos_dir.iterdir():
+            if p.is_file() and p.suffix.lower() == ".webp" and p.name not in active_filenames:
+                try:
+                    p.unlink()
+                    logger.info("Removed orphaned photo from production dist: %s", p.name)
+                except OSError as e:
+                    logger.warning("Could not delete orphan from dist '%s': %s", p.name, e)
+
+    # 5. Save updated manifest
     save_manifest(manifest_path, active_items)
     logger.info("Manifest reconciled: %d active photos", len(active_items))
 

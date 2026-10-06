@@ -34,6 +34,28 @@ logging.basicConfig(
 logger = logging.getLogger("photos.watcher")
 
 
+def load_env_file(path: Path) -> None:
+    """Load key-value environment variables from file if present and not already set."""
+    if not path.is_file():
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip("'\"")
+                if k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
+
+
+load_env_file(Path("/etc/home-calendar/home-calendar.env"))
+
+
 class PhotoDebounceHandler(FileSystemEventHandler):
     """
     Debounced event handler that waits for writes to complete before reconciling.
@@ -45,12 +67,16 @@ class PhotoDebounceHandler(FileSystemEventHandler):
         processed_dir: Path,
         manifest_path: Path,
         debounce_seconds: float = 0.8,
+        max_dimension: int = 1920,
+        quality: int = 85,
     ) -> None:
         super().__init__()
         self.incoming_dir = incoming_dir
         self.processed_dir = processed_dir
         self.manifest_path = manifest_path
         self.debounce_seconds = debounce_seconds
+        self.max_dimension = max_dimension
+        self.quality = quality
 
         self._lock = threading.Lock()
         self._timer: Optional[threading.Timer] = None
@@ -134,7 +160,13 @@ class PhotoDebounceHandler(FileSystemEventHandler):
                 if p.is_file() and is_supported_file(p):
                     self._wait_for_file_settled(p)
 
-            items = reconcile_manifest(self.incoming_dir, self.processed_dir, self.manifest_path)
+            items = reconcile_manifest(
+                self.incoming_dir,
+                self.processed_dir,
+                self.manifest_path,
+                max_dimension=self.max_dimension,
+                quality=self.quality,
+            )
             logger.info("Photo ingestion updated: %d active photos in manifest.", len(items))
         except Exception as e:
             logger.error("Error during photo reconciliation: %s", e, exc_info=True)
@@ -143,30 +175,50 @@ class PhotoDebounceHandler(FileSystemEventHandler):
 def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent.parent
 
+    default_incoming = Path(os.environ.get("PHOTO_INPUT_DIR", repo_root / "data" / "photos" / "incoming"))
+    default_processed = Path(os.environ.get("PHOTO_OUTPUT_DIR", repo_root / "data" / "photos" / "processed"))
+    default_manifest = Path(os.environ.get("PHOTO_MANIFEST", repo_root / "data" / "photos" / "manifest.json"))
+    default_max_size = int(os.environ.get("PHOTO_MAX_SIZE", "1920"))
+    default_quality = int(os.environ.get("PHOTO_QUALITY", "85"))
+
     parser = argparse.ArgumentParser(description="Watch incoming directory and ingest photos.")
     parser.add_argument(
         "--incoming",
         type=Path,
-        default=repo_root / "data" / "photos" / "incoming",
+        default=default_incoming,
         help="Directory to watch for incoming images",
     )
     parser.add_argument(
         "--processed",
         type=Path,
-        default=repo_root / "data" / "photos" / "processed",
+        default=default_processed,
         help="Directory for processed WebP images",
     )
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=repo_root / "data" / "photos" / "manifest.json",
+        default=default_manifest,
         help="Path to photo manifest JSON",
+    )
+    parser.add_argument(
+        "--max-size",
+        type=int,
+        default=default_max_size,
+        help="Maximum width or height of processed image",
+    )
+    parser.add_argument(
+        "--quality",
+        type=int,
+        default=default_quality,
+        help="WebP quality (0-100)",
     )
     args = parser.parse_args()
 
     incoming_dir: Path = args.incoming.resolve()
     processed_dir: Path = args.processed.resolve()
     manifest_path: Path = args.manifest.resolve()
+    max_dimension: int = args.max_size
+    quality: int = args.quality
 
     incoming_dir.mkdir(parents=True, exist_ok=True)
     processed_dir.mkdir(parents=True, exist_ok=True)
@@ -176,11 +228,18 @@ def main() -> None:
     logger.info("  Incoming:  %s", incoming_dir)
     logger.info("  Processed: %s", processed_dir)
     logger.info("  Manifest:  %s", manifest_path)
+    logger.info("  Max size:  %dpx | Quality: %d", max_dimension, quality)
 
     # Initial scan to ensure any existing photos are ingested
     logger.info("Running initial reconciliation scan...")
     try:
-        initial_items = reconcile_manifest(incoming_dir, processed_dir, manifest_path)
+        initial_items = reconcile_manifest(
+            incoming_dir,
+            processed_dir,
+            manifest_path,
+            max_dimension=max_dimension,
+            quality=quality,
+        )
         logger.info("Initial scan complete: %d photos loaded.", len(initial_items))
     except Exception as e:
         logger.error("Failed during initial scan: %s", e, exc_info=True)
@@ -189,6 +248,8 @@ def main() -> None:
         incoming_dir=incoming_dir,
         processed_dir=processed_dir,
         manifest_path=manifest_path,
+        max_dimension=max_dimension,
+        quality=quality,
     )
 
     observer = Observer()
