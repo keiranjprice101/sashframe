@@ -141,6 +141,33 @@ Run the non-root interactive helper to authorize Google Drive:
 ```
 Follow the prompts to configure the `gdrive` remote and target folder (default: `Calendar Photos`). The helper verifies the connection, performs an initial sync into `/var/lib/sashframe/photos/incoming/`, and activates the `sashframe-photo-sync.timer`.
 
+##### Authenticating Over Headless SSH
+Because Raspberry Pi OS is typically accessed over SSH without a local desktop web browser, use one of the following methods:
+
+- **Method A: SSH Port Forwarding (Recommended & Easiest)**  
+  Connect to your Pi with port `53682` forwarded (rclone's local callback port):
+  ```bash
+  ssh -L 53682:127.0.0.1:53682 <user>@<pi-ip>
+  ```
+  Run `./scripts/setup-google-drive.sh`. When prompted `Use web browser to automatically authenticate rclone with remote?`, answer **`y`** (Yes). Open the generated Google authorization URL in your laptop browser and approve access. The browser redirects to `http://127.0.0.1:53682/`, which forwards through the SSH tunnel directly to the Pi's rclone listener.
+
+- **Method B: Headless Remote Authorization**  
+  When prompted `Use web browser to automatically authenticate rclone with remote?`, answer **`n`** (No).  
+  On your desktop/laptop (with `rclone` installed), run:
+  ```bash
+  rclone authorize "drive"
+  ```
+  Approve the browser prompt on your laptop, then copy the output JSON token string (`{"access_token": ...}`) and paste it into the `result>` prompt on your Pi.
+
+- **Method C: Copy Config from Desktop**  
+  If you have already configured Google Drive in rclone on your laptop:
+  ```bash
+  scp ~/.config/rclone/rclone.conf <user>@<pi-ip>:~/.config/rclone/rclone.conf
+  ```
+
+- **Method D: Google Cloud Service Account (Fully Headless / No User OAuth)**  
+  Create a Google Cloud Service Account with Google Drive API enabled, download its private key (`service-account.json`), copy it to your Pi (`~/.config/rclone/service-account.json`), and configure `rclone.conf` with `service_account_file`. Share your Google Drive photo folder with the service account email. No interactive browser login or token expiration ever required.
+
 #### Step 3: Production Service Controls
 Manage the running container stack using standard Docker Compose commands:
 ```bash
