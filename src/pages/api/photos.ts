@@ -3,12 +3,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function getManifestPath(): string {
-  if (process.env.PHOTO_MANIFEST && fs.existsSync(process.env.PHOTO_MANIFEST)) {
+  if (process.env.PHOTO_MANIFEST) {
     return process.env.PHOTO_MANIFEST;
   }
-  const systemPath = '/var/lib/home-calendar/photos/manifest.json';
-  if (fs.existsSync(systemPath)) {
-    return systemPath;
+  const sashframePath = '/var/lib/sashframe/photos/manifest.json';
+  if (fs.existsSync(sashframePath)) {
+    return sashframePath;
+  }
+  const legacyPath = '/var/lib/home-calendar/photos/manifest.json';
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
   }
   return path.resolve('data/photos/manifest.json');
 }

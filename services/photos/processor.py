@@ -53,6 +53,7 @@ def load_env_file(path: Path) -> None:
         pass
 
 
+load_env_file(Path("/etc/sashframe/sashframe.env"))
 load_env_file(Path("/etc/home-calendar/home-calendar.env"))
 
 

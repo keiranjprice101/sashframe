@@ -1,0 +1,43 @@
+services:
+  sashframe-app:
+    container_name: sashframe-app
+    image: sashframe-app:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4321:4321"
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=4321
+      - PHOTO_OUTPUT_DIR=/data/photos/processed
+      - PHOTO_MANIFEST=/data/photos/manifest.json
+    volumes:
+      - ${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}:/data/photos:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4321/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - sashframe-photo-processor
+
+  sashframe-photo-processor:
+    container_name: sashframe-photo-processor
+    image: sashframe-photo-processor:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.photos
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PHOTO_INPUT_DIR=/data/photos/incoming
+      - PHOTO_OUTPUT_DIR=/data/photos/processed
+      - PHOTO_MANIFEST=/data/photos/manifest.json
+      - PHOTO_MAX_SIZE=1920
+      - PHOTO_QUALITY=85
+    volumes:
+      - ${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}:/data/photos:rw

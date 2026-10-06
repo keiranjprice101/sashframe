@@ -1,0 +1,30 @@
+# Dependencies & virtual environments
+node_modules
+.venv
+__pycache__
+*.pyc
+
+# Git & development artifacts
+.git
+.gitignore
+.astro
+dist
+*.log
+*.pid
+
+# Local runtime & test photos
+data/photos/incoming/*
+!data/photos/incoming/.gitkeep
+data/photos/processed/*
+!data/photos/processed/.gitkeep
+data/photos/manifest.json
+
+# Secrets & configuration
+*.env
+*.env.*
+rclone.conf
+.config
+
+# Temp / scratch
+scratch
+tmp
