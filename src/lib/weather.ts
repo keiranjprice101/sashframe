@@ -1,7 +1,7 @@
 import type { Weather } from './types';
 
 /**
- * Coordinates for Local Forecast, UK
+ * Default coordinates for local weather forecast
  * Latitude: 51.453° N, Longitude: -0.902° W
  */
 export const DEFAULT_WEATHER_COORDS = {
@@ -72,7 +72,7 @@ export function getWeatherConditionFromCode(code: number): string {
 }
 
 /**
- * Fetch real-time weather from Open-Meteo for Local Forecast, UK.
+ * Fetch real-time weather from Open-Meteo for configured coordinates.
  * Fully authless, zero API key required, CORS-enabled.
  */
 export async function fetchLocalWeather(): Promise<Weather> {

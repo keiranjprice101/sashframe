@@ -38,8 +38,8 @@ It features a horizontal layout inspired by a traditional photo calendar, with a
 - **Non-Touch Presentation**:
   - All interactive buttons, chrome, and modal popups removed for a serene, print-like ambient aesthetic.
 
-### 🌦️ Live Authless Weather (Local Forecast)
-- **Open-Meteo Integration**: Authless, keyless weather API calibrated for Local Forecast (`51.453° N, -0.902° W`).
+### 🌦️ Live Authless Weather
+- **Open-Meteo Integration**: Authless, keyless weather API calibrated for local coordinates (`51.453° N, -0.902° W`).
 - **Comprehensive WMO Interpretation**: Translates meteorological codes into clean conditions (*Clear, Partly Cloudy, Overcast, Rain, Drizzle, Showers, Snow, Fog, Thunderstorm*).
 - **Background Refresh**: Automatically updates every 10 minutes with silent fallback to preserve reliability.
 
@@ -94,7 +94,7 @@ src/
     types.ts               # TypeScript interfaces (CalendarEvent, PhotoManifestItem, etc.)
     dates.ts               # Date math, ISO formatters, BST-aware clock, & month grid helpers
     sunSchedule.ts         # 366-day UK South East sunrise/sunset schedule & solar theme evaluators
-    weather.ts             # Authless Open-Meteo weather client for Local Forecast
+    weather.ts             # Authless Open-Meteo weather client with local coordinate defaults
   pages/
     api/
       photos.ts            # Dynamic API endpoint serving data/photos/manifest.json
@@ -244,9 +244,14 @@ The Google Drive source remains completely decoupled from the local photo proces
 - [ ] **HEIC / HEIF Format Support**: Add `pillow-heif` support once system libraries (`libheif`) are available.
 - [ ] **Local Photo Reader**: Integration with Immich or local network folder (Syncthing/SMB).
 
-### 📅 Calendar & Integrations
+### 📅 Calendar & Weather Integrations
 - [ ] **Calendar Synchronization**: Connect to CalDAV / iCal feeds, Google Calendar, or Apple iCloud API.
-- [x] **Live Weather Feed**: Integrated Open-Meteo authless API for Local Forecast with WMO condition mapping.
+- [x] **Live Weather Feed**: Integrated Open-Meteo authless API with WMO condition mapping.
+- [ ] **Configurable Weather Location & Display Settings**: Replace hardcoded weather forecast coordinates with dynamic user configuration via `/etc/home-calendar/home-calendar.env` (e.g. `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`, `WEATHER_LOCATION_NAME`), along with customizable photo and view transition intervals.
+
+### 🚀 Production Daemon & System Supervision
+- [ ] **Daemon Auto-Update via GitHub Polling**: Enhance the supervisor daemon to periodically poll `origin/main` on GitHub; when new commits are detected, automatically pull changes (`git pull`), trigger rebuild (`npm run build`), and cleanly restart supervised services.
+- [ ] **Remote Management & Health Checks**: Expose lightweight status metrics and remote reboot/reload hooks.
 
 ### 💾 Storage & Backend
 - [ ] **Persistence Layer**: Store created/edited events in SQLite or a lightweight local JSON store.
