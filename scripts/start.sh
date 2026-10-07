@@ -232,6 +232,46 @@ clean_browser_state() {
         "$HOME/.config/chromium-browser/SingletonSocket" 2>/dev/null || true
 }
 
+# Setup transparent cursor theme to completely suppress cursor in Cage and Wayland/X11
+ensure_transparent_cursor_theme() {
+  local target_home="${HOME}"
+  local icon_dir="${target_home}/.icons/sashframe-transparent"
+  local cursors_dir="${icon_dir}/cursors"
+  local default_icon_dir="${target_home}/.icons/default"
+
+  if [ ! -f "${cursors_dir}/default" ]; then
+    mkdir -p "${cursors_dir}" "${default_icon_dir}" 2>/dev/null || true
+
+    # Decode 68-byte 1x1 transparent Xcursor binary
+    echo "WGN1chAAAAABAAAAAQAAAAIA/f8gAAAAHAAAACQAAAACAP3/IAAAAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=" | \
+      base64 -d > "${cursors_dir}/default" 2>/dev/null || true
+
+    if [ -f "${cursors_dir}/default" ]; then
+      for c in left_ptr right_ptr top_left_arrow arrow pointer hand hand1 hand2 \
+               grab grabbing wait watch progress xterm text ibeam crosshair cross \
+               move size_all help question_arrow dnd-none dnd-move dnd-copy dnd-link \
+               0000816000000681000040808001010c 08e631cbe3823404b201215b04232244; do
+        ln -sf default "${cursors_dir}/${c}" 2>/dev/null || true
+      done
+
+      cat << 'EOF' > "${icon_dir}/index.theme"
+[Icon Theme]
+Name=sashframe-transparent
+Comment=Transparent invisible cursor theme for Sashframe kiosk display
+EOF
+
+      cat << 'EOF' > "${default_icon_dir}/index.theme"
+[Icon Theme]
+Name=default
+Inherits=sashframe-transparent
+EOF
+    fi
+  fi
+
+  export XCURSOR_THEME="sashframe-transparent"
+  export XCURSOR_SIZE=1
+}
+
 # Locate browser binary
 find_browser_bin() {
   for bin in chromium-browser chromium google-chrome; do
@@ -255,6 +295,7 @@ launch_kiosk() {
   fi
 
   clean_browser_state
+  ensure_transparent_cursor_theme
 
   local chromium_flags=(
     --kiosk

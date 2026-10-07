@@ -122,7 +122,7 @@
     color: var(--text-muted);
     background: transparent;
     border: none;
-    cursor: pointer;
+    cursor: none;
     transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
   }
 

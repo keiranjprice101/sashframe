@@ -14,6 +14,8 @@ EnvironmentFile=-/etc/sashframe/sashframe.env
 EnvironmentFile=-/etc/home-calendar/home-calendar.env
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=XCURSOR_THEME=sashframe-transparent
+Environment=XCURSOR_SIZE=1
 PAMName=login
 TTYPath=/dev/tty1
 TTYReset=yes

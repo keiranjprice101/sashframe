@@ -257,6 +257,36 @@ chmod +x "$ROOT_DIR/scripts/sync-photos.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/update.sh" 2>/dev/null || true
 
+# Set up transparent cursor theme on host to suppress cursor in Cage and Chromium
+echo "  Configuring transparent cursor theme for kiosk display..."
+CURSOR_BASE="/usr/share/icons/sashframe-transparent"
+CURSOR_DIR="${CURSOR_BASE}/cursors"
+run_as_root mkdir -p "${CURSOR_DIR}"
+echo "WGN1chAAAAABAAAAAQAAAAIA/f8gAAAAHAAAACQAAAACAP3/IAAAAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=" | \
+  base64 -d | run_as_root tee "${CURSOR_DIR}/default" >/dev/null
+for c in left_ptr right_ptr top_left_arrow arrow pointer hand hand1 hand2 \
+         grab grabbing wait watch progress xterm text ibeam crosshair cross \
+         move size_all help question_arrow dnd-none dnd-move dnd-copy dnd-link \
+         0000816000000681000040808001010c 08e631cbe3823404b201215b04232244; do
+  run_as_root ln -sf default "${CURSOR_DIR}/${c}" 2>/dev/null || true
+done
+run_as_root bash -c "cat << 'EOF' > '${CURSOR_BASE}/index.theme'
+[Icon Theme]
+Name=sashframe-transparent
+Comment=Transparent invisible cursor theme for Sashframe kiosk display
+EOF"
+
+if [ -n "$INSTALL_HOME" ] && [ -d "$INSTALL_HOME" ]; then
+  USER_ICONS="${INSTALL_HOME}/.icons/default"
+  run_as_root mkdir -p "${USER_ICONS}"
+  run_as_root bash -c "cat << 'EOF' > '${USER_ICONS}/index.theme'
+[Icon Theme]
+Name=default
+Inherits=sashframe-transparent
+EOF"
+  run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "${INSTALL_HOME}/.icons" 2>/dev/null || true
+fi
+
 # 5. Install systemd units
 echo "[4/5] Installing host systemd units..."
 SYSTEMD_DIR="/etc/systemd/system"

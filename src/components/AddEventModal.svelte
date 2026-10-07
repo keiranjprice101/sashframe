@@ -396,7 +396,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    cursor: pointer;
+    cursor: none;
     font-size: 0.92rem;
     font-weight: 500;
     color: var(--text-main);
