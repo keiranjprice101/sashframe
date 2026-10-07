@@ -87,6 +87,16 @@ if command -v apt-get >/dev/null 2>&1; then
     if ! command -v docker >/dev/null 2>&1; then
       PACKAGES+=("docker.io" "docker-compose-plugin")
     fi
+    if ! command -v cage >/dev/null 2>&1; then
+      PACKAGES+=("cage")
+    fi
+    if ! command -v chromium-browser >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
+      if apt-cache show chromium-browser >/dev/null 2>&1; then
+        PACKAGES+=("chromium-browser")
+      elif apt-cache show chromium >/dev/null 2>&1; then
+        PACKAGES+=("chromium")
+      fi
+    fi
   fi
 
   if [ ${#PACKAGES[@]} -gt 0 ]; then
@@ -100,13 +110,15 @@ elif ! command -v rclone >/dev/null 2>&1; then
   echo "  [Warning] rclone is not installed. Please install rclone manually." >&2
 fi
 
-# Ensure user is in docker group if docker exists
-if getent group docker >/dev/null 2>&1; then
-  if ! id -nG "$INSTALL_USER" | grep -qw docker; then
-    echo "  Adding user '$INSTALL_USER' to docker group..."
-    run_as_root usermod -aG docker "$INSTALL_USER" 2>/dev/null || true
+# Ensure user is in required groups (docker, video, render, input) for kiosk display
+for grp in docker video render input; do
+  if getent group "$grp" >/dev/null 2>&1; then
+    if ! id -nG "$INSTALL_USER" 2>/dev/null | grep -qw "$grp"; then
+      echo "  Adding user '$INSTALL_USER' to $grp group..."
+      run_as_root usermod -aG "$grp" "$INSTALL_USER" 2>/dev/null || true
+    fi
   fi
-fi
+done
 
 # Ensure Docker daemon is enabled and running
 if command -v systemctl >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
@@ -240,6 +252,7 @@ else
 fi
 
 # Ensure helper scripts are executable
+chmod +x "$ROOT_DIR/scripts/start.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/sync-photos.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/update.sh" 2>/dev/null || true
@@ -258,6 +271,7 @@ if [ -d "$SYSTEMD_DIR" ]; then
     fi
   }
 
+  install_unit "$ROOT_DIR/systemd/sashframe-kiosk.service" "$SYSTEMD_DIR/sashframe-kiosk.service"
   install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.service" "$SYSTEMD_DIR/sashframe-photo-sync.service"
   install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.timer" "$SYSTEMD_DIR/sashframe-photo-sync.timer"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
@@ -271,6 +285,8 @@ if [ -d "$SYSTEMD_DIR" ]; then
     run_as_root systemctl daemon-reload
     # Enable updater timer by default
     run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
+    # Enable kiosk service on boot by default (starts Cage/Chromium on tty1)
+    run_as_root systemctl enable sashframe-kiosk.service 2>/dev/null || true
   fi
 fi
 
@@ -342,9 +358,14 @@ if [ "$GDRIVE_READY" = true ]; then
   echo ""
   echo "=========================================="
   echo " Setup complete!"
-  echo " Google Drive photo sync is ACTIVE."
   echo " Docker application services are RUNNING."
+  echo " Google Drive photo sync is ACTIVE."
   echo " Auto-updater timer is ACTIVE."
+  echo " Kiosk display service is ENABLED on boot."
+  echo ""
+  echo " To start the kiosk manually or check status:"
+  echo "   ./scripts/start.sh"
+  echo "   ./scripts/start.sh --status"
   echo "=========================================="
 else
   echo "Google Drive remote '${REMOTE_NAME}:' is not configured yet."
@@ -353,9 +374,12 @@ else
   echo " Setup complete!"
   echo " Docker application services are RUNNING."
   echo " Auto-updater timer is ACTIVE."
+  echo " Kiosk display service is ENABLED on boot."
   echo ""
-  echo " NEXT STEP: Configure Google Drive photo sync"
-  echo " Run the setup helper script as '$INSTALL_USER':"
-  echo "   ./scripts/setup-google-drive.sh"
+  echo " NEXT STEPS:"
+  echo " 1. Configure Google Drive photo sync as '$INSTALL_USER':"
+  echo "    ./scripts/setup-google-drive.sh"
+  echo " 2. Start the kiosk display or check status:"
+  echo "    ./scripts/start.sh"
   echo "=========================================="
 fi

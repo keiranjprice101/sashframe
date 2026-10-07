@@ -16,8 +16,10 @@
     "prod:down": "docker compose down",
     "prod:logs": "docker compose logs -f",
     "prod:ps": "docker compose ps",
-    "prod:update": "bash scripts/update.sh",
-    "start": "docker compose up -d",
+    "start": "bash scripts/start.sh",
+    "kiosk": "bash scripts/start.sh",
+    "kiosk:boot": "bash scripts/start.sh --setup-boot",
+    "kiosk:status": "bash scripts/start.sh --status",
     "daemon": "python3 daemon.py",
     "astro": "astro"
   },

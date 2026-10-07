@@ -16,9 +16,9 @@ Sashframe divides responsibilities cleanly between the Raspberry Pi host OS and 
 ```text
 Raspberry Pi Host (Raspberry Pi OS Lite)
 ├── Systemd Host Services & Timers
+│   ├── sashframe-kiosk.service       # Launches Chromium under Cage on tty1 on boot
 │   ├── sashframe-updater.timer       # Polls GitHub origin/main every 5 min, builds & deploys
-│   ├── sashframe-photo-sync.timer    # Runs rclone sync from Google Drive every 5 min
-│   └── Chromium/Cage kiosk           # Host graphical environment displaying localhost:4321
+│   └── sashframe-photo-sync.timer    # Runs rclone sync from Google Drive every 5 min
 ├── Docker Compose Application Services
 │   ├── sashframe-app                 # Production Node/Astro SSR web server (127.0.0.1:4321)
 │   └── sashframe-photo-processor     # Watchdog/inotify WebP image pipeline
@@ -126,13 +126,13 @@ sudo ./scripts/install.sh
 ```
 
 The installer:
-1. Provisions minimal host system packages: `docker.io`, `docker-compose-plugin`, `rclone`, `curl` (host Python and Node are **not** installed since services run in Docker).
-2. Adds the application user to the `docker` group.
+1. Provisions minimal host system packages: `docker.io`, `docker-compose-plugin`, `rclone`, `curl`, `cage`, `chromium-browser` (host Python and Node are **not** installed since services run in Docker).
+2. Adds the application user to the `docker`, `video`, `render`, and `input` groups (allowing DRM hardware acceleration and input access without root).
 3. Creates persistent host directories under `/var/lib/sashframe/` with `755` permissions.
 4. Generates the central environment configuration at `/etc/sashframe/sashframe.env`.
 5. Builds Docker images tagged with the active Git commit SHA.
 6. Launches the application stack with Docker Compose.
-7. Registers and activates systemd timers (`sashframe-updater.timer`, `sashframe-photo-sync.timer`).
+7. Registers and activates systemd units (`sashframe-kiosk.service` on `tty1`, `sashframe-updater.timer`, `sashframe-photo-sync.timer`).
 
 #### Step 2: Configure Google Drive Photo Sync
 Run the non-root interactive helper to authorize Google Drive:
@@ -168,8 +168,36 @@ Because Raspberry Pi OS is typically accessed over SSH without a local desktop w
 - **Method D: Google Cloud Service Account (Fully Headless / No User OAuth)**  
   Create a Google Cloud Service Account with Google Drive API enabled, download its private key (`service-account.json`), copy it to your Pi (`~/.config/rclone/service-account.json`), and configure `rclone.conf` with `service_account_file`. Share your Google Drive photo folder with the service account email. No interactive browser login or token expiration ever required.
 
-#### Step 3: Production Service Controls
-Manage the running container stack using standard Docker Compose commands:
+#### Step 3: Production Service Controls & Kiosk Manager
+
+Sashframe provides a unified startup manager (`scripts/start.sh` / `npm start`) designed for **Raspberry Pi OS Lite**:
+
+```bash
+# 1. Start all services, activate timers, wait for health, and launch kiosk display
+./scripts/start.sh
+# or: npm start
+
+# 2. Configure automatic power-on boot autostart
+./scripts/start.sh --setup-boot
+
+# 3. Check live status of containers, HTTP health, timers, and kiosk
+./scripts/start.sh --status
+# or: npm run kiosk:status
+
+# 4. Start only the backend Docker containers and timers (headless)
+./scripts/start.sh --stack-only
+
+# 5. Stop all containers and kiosk
+./scripts/start.sh --stop
+```
+
+##### How Power-On Startup Works:
+1. **Docker Daemon** starts on boot (`systemctl enable docker`). Both `sashframe-app` and `sashframe-photo-processor` containers have `restart: unless-stopped` and are launched immediately.
+2. **`sashframe-photo-sync.timer`** triggers 1 minute after boot (`OnBootSec=1m`), syncing incoming photos from Google Drive every 5 minutes.
+3. **`sashframe-updater.timer`** triggers 2 minutes after boot (`OnBootSec=2m`), checking GitHub `origin/main` every 5 minutes for new releases.
+4. **`sashframe-kiosk.service`** runs on `tty1`, waits for `http://127.0.0.1:4321/health` to respond, and launches the **Cage** Wayland compositor with fullscreen Chromium kiosk mode directly onto the HDMI display.
+
+##### Standard Docker Compose Controls:
 ```bash
 # Check service health and status
 docker compose ps
@@ -188,7 +216,7 @@ docker compose down
 # or: npm run prod:down
 ```
 
-*(Note: `daemon.py` is retired from production; Docker Compose is now the production supervisor).*
+*(Note: `daemon.py` is retired from production; Docker Compose and `sashframe-kiosk.service` manage production).*
 
 ---
 
@@ -248,5 +276,5 @@ RCLONE_CONFIG=/home/pi/.config/rclone/rclone.conf
 - [ ] **Configurable Weather Location & Display Settings**: Dynamically configure weather forecast coordinates via `sashframe.env` (`WEATHER_LATITUDE`, `WEATHER_LONGITUDE`).
 
 ### 🖥️ Hardware & Kiosk
-- [ ] **Raspberry Pi Chromium Kiosk**: Wayland/Cage or Chromium kiosk autostart script (`--kiosk --incognito`) & systemd service.
+- [x] **Raspberry Pi Chromium Kiosk**: Wayland/Cage or Chromium kiosk autostart script (`--kiosk --incognito`) & systemd service.
 - [ ] **Display Power Management**: Bedtime screen dimming schedule to preserve display lifespan.

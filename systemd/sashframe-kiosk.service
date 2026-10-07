@@ -1,0 +1,30 @@
+[Unit]
+Description=Sashframe Kiosk Display
+Documentation=https://github.com/keiranjprice101/sashframe
+Wants=network-online.target docker.service
+After=network-online.target docker.service time-sync.target systemd-user-sessions.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+User=@INSTALL_USER@
+WorkingDirectory=@REPO_ROOT@
+EnvironmentFile=-/etc/sashframe/sashframe.env
+EnvironmentFile=-/etc/home-calendar/home-calendar.env
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+ExecStart=/bin/bash @REPO_ROOT@/scripts/start.sh --kiosk-only
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target graphical.target
