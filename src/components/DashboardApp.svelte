@@ -8,17 +8,55 @@
   import { getAutomaticTheme } from '../lib/sunSchedule';
   import { HOUSEHOLD_MEMBERS, MOCK_PHOTOS, MOCK_WEATHER, getInitialMockEvents } from '../data/mock';
 
-  let events = $state<CalendarEvent[]>(getInitialMockEvents());
+  interface Props {
+    initialShifterEvents?: CalendarEvent[];
+  }
+
+  let { initialShifterEvents = [] }: Props = $props();
+
+  function resolveCalendarEvents(shifterList: CalendarEvent[]): CalendarEvent[] {
+    // If real Shifter events are loaded, display only real calendar data.
+    // Mock events serve purely as an initial placeholder when no Shifter file is present.
+    if (shifterList.length > 0) {
+      return shifterList;
+    }
+    return getInitialMockEvents();
+  }
+
+  // svelte-ignore state_referenced_locally
+  let events = $state<CalendarEvent[]>(resolveCalendarEvents(initialShifterEvents));
   let theme = $state<'light' | 'dark'>(getAutomaticTheme());
   let currentView = $state<'month' | 'week'>('week');
 
   let solarTimer: ReturnType<typeof setInterval>;
   let viewTimer: ReturnType<typeof setInterval>;
+  let calendarTimer: ReturnType<typeof setInterval>;
+
+  async function refreshCalendarEvents() {
+    try {
+      const res = await fetch('/api/calendar');
+      if (!res.ok) return;
+      const data: CalendarEvent[] = await res.json();
+      if (Array.isArray(data)) {
+        events = resolveCalendarEvents(data);
+      }
+    } catch {
+      // Ignore network errors in local dev
+    }
+  }
 
   onMount(() => {
     // Initial evaluation of solar theme
     theme = getAutomaticTheme(new Date());
     document.documentElement.setAttribute('data-theme', theme);
+
+    // If client mounted without initial shifter events, fetch immediately
+    if (initialShifterEvents.length === 0) {
+      refreshCalendarEvents();
+    }
+
+    // Periodically poll Shifter calendar endpoint every 30 seconds
+    calendarTimer = setInterval(refreshCalendarEvents, 30000);
 
     // Periodically re-evaluate every 30 seconds for sunrise/sunset transitions
     solarTimer = setInterval(() => {
@@ -38,6 +76,7 @@
   onDestroy(() => {
     if (solarTimer) clearInterval(solarTimer);
     if (viewTimer) clearInterval(viewTimer);
+    if (calendarTimer) clearInterval(calendarTimer);
   });
 </script>
 

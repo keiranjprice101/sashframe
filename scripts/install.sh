@@ -191,6 +191,7 @@ RUNTIME_DIRS=(
   "/var/lib/sashframe/photos/incoming"
   "/var/lib/sashframe/photos/processed"
   "/var/lib/sashframe/calendar"
+  "/var/lib/sashframe/calendar/incoming"
   "/var/lib/sashframe/state"
   "/var/lib/sashframe/database"
 )
@@ -211,7 +212,7 @@ if [ -d "/var/lib/home-calendar/photos" ] && [ ! -f "/var/lib/sashframe/photos/m
 fi
 
 run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "/var/lib/sashframe"
-run_as_root chmod 755 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
+run_as_root chmod 755 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/calendar/incoming" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
 
 # 4. Central environment file
 echo "[3/5] Configuring central environment file (/etc/sashframe/sashframe.env)..."
@@ -242,6 +243,12 @@ PHOTO_QUALITY=85
 RCLONE_REMOTE=gdrive
 RCLONE_PHOTO_PATH=\"Calendar Photos\"
 
+RCLONE_SHIFTER_REMOTE=gdrive
+RCLONE_SHIFTER_FOLDER_ID=\"\"
+RCLONE_SHIFTER_PATH=\"\"
+SHIFTER_INPUT_DIR=/var/lib/sashframe/calendar
+SHIFTER_FILE_PATH=/var/lib/sashframe/calendar/calendar.Shifter
+
 RCLONE_CONFIG=${INSTALL_HOME}/.config/rclone/rclone.conf
 EOF"
   fi
@@ -249,12 +256,26 @@ EOF"
   run_as_root chmod 644 "$ENV_FILE"
 else
   echo "  Existing $ENV_FILE found. Preserving user configuration."
+  # Ensure Shifter variables exist if upgrading from older version
+  if ! grep -q "^SHIFTER_INPUT_DIR=" "$ENV_FILE" 2>/dev/null; then
+    run_as_root bash -c "cat << 'EOF' >> '$ENV_FILE'
+
+# Shifter Calendar Sync Settings
+RCLONE_SHIFTER_REMOTE=gdrive
+RCLONE_SHIFTER_FOLDER_ID=\"\"
+RCLONE_SHIFTER_PATH=\"\"
+SHIFTER_INPUT_DIR=/var/lib/sashframe/calendar
+SHIFTER_FILE_PATH=/var/lib/sashframe/calendar/calendar.Shifter
+EOF"
+  fi
 fi
 
 # Ensure helper scripts are executable
 chmod +x "$ROOT_DIR/scripts/start.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/sync-photos.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive.sh" 2>/dev/null || true
+chmod +x "$ROOT_DIR/scripts/sync-shifter.sh" 2>/dev/null || true
+chmod +x "$ROOT_DIR/scripts/setup-google-drive-shifter.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/update.sh" 2>/dev/null || true
 
 # Set up transparent cursor theme on host to suppress cursor in Cage and Chromium
@@ -304,6 +325,8 @@ if [ -d "$SYSTEMD_DIR" ]; then
   install_unit "$ROOT_DIR/systemd/sashframe-kiosk.service" "$SYSTEMD_DIR/sashframe-kiosk.service"
   install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.service" "$SYSTEMD_DIR/sashframe-photo-sync.service"
   install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.timer" "$SYSTEMD_DIR/sashframe-photo-sync.timer"
+  install_unit "$ROOT_DIR/systemd/sashframe-shifter-sync.service" "$SYSTEMD_DIR/sashframe-shifter-sync.service"
+  install_unit "$ROOT_DIR/systemd/sashframe-shifter-sync.timer" "$SYSTEMD_DIR/sashframe-shifter-sync.timer"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.timer" "$SYSTEMD_DIR/sashframe-updater.timer"
 
@@ -315,6 +338,8 @@ if [ -d "$SYSTEMD_DIR" ]; then
     run_as_root systemctl daemon-reload
     # Enable updater timer by default
     run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
+    # Enable shifter sync timer by default (runs every 5 minutes)
+    run_as_root systemctl enable --now sashframe-shifter-sync.timer 2>/dev/null || true
     # Enable kiosk service on boot by default (starts Cage/Chromium on tty1)
     run_as_root systemctl enable sashframe-kiosk.service 2>/dev/null || true
   fi
@@ -385,31 +410,25 @@ if [ "$GDRIVE_READY" = true ]; then
     echo "Enabling and starting Google Drive photo sync timer..."
     run_as_root systemctl enable --now sashframe-photo-sync.timer 2>/dev/null || true
   fi
-  echo ""
-  echo "=========================================="
-  echo " Setup complete!"
-  echo " Docker application services are RUNNING."
-  echo " Google Drive photo sync is ACTIVE."
-  echo " Auto-updater timer is ACTIVE."
-  echo " Kiosk display service is ENABLED on boot."
-  echo ""
-  echo " To start the kiosk manually or check status:"
-  echo "   ./scripts/start.sh"
-  echo "   ./scripts/start.sh --status"
-  echo "=========================================="
-else
-  echo "Google Drive remote '${REMOTE_NAME}:' is not configured yet."
-  echo ""
-  echo "=========================================="
-  echo " Setup complete!"
-  echo " Docker application services are RUNNING."
-  echo " Auto-updater timer is ACTIVE."
-  echo " Kiosk display service is ENABLED on boot."
-  echo ""
-  echo " NEXT STEPS:"
-  echo " 1. Configure Google Drive photo sync as '$INSTALL_USER':"
-  echo "    ./scripts/setup-google-drive.sh"
-  echo " 2. Start the kiosk display or check status:"
-  echo "    ./scripts/start.sh"
-  echo "=========================================="
 fi
+
+echo ""
+echo "=========================================="
+echo " Setup complete!"
+echo " Docker application services are RUNNING."
+if [ "$GDRIVE_READY" = true ]; then
+  echo " Google Drive photo sync is ACTIVE."
+fi
+echo " Google Drive Shifter calendar timer is ACTIVE (every 5m)."
+echo " Auto-updater timer is ACTIVE."
+echo " Kiosk display service is ENABLED on boot."
+echo ""
+echo " NEXT STEPS:"
+echo " 1. Configure Google Drive Shifter calendar sync as '$INSTALL_USER':"
+echo "    ./scripts/setup-google-drive-shifter.sh"
+echo " 2. Configure Google Drive photo sync as '$INSTALL_USER' (if not yet done):"
+echo "    ./scripts/setup-google-drive.sh"
+echo " 3. Start the kiosk display or check status:"
+echo "    ./scripts/start.sh"
+echo "    ./scripts/start.sh --status"
+echo "=========================================="

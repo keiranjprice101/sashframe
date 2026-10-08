@@ -16,8 +16,11 @@ services:
       - PGID=${PGID:-1000}
       - PHOTO_OUTPUT_DIR=/data/photos/processed
       - PHOTO_MANIFEST=/data/photos/manifest.json
+      - SHIFTER_INPUT_DIR=/data/calendar
+      - SHIFTER_FILE_PATH=/data/calendar/calendar.Shifter
     volumes:
       - ${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}:/data/photos:ro
+      - ${SASHFRAME_CALENDAR_DIR:-/var/lib/sashframe/calendar}:/data/calendar:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4321/health"]
       interval: 15s

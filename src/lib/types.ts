@@ -8,6 +8,8 @@ export interface HouseholdMember {
   initials: string;
 }
 
+export type ShiftType = 'ld' | 'day_off' | 'night' | 'other';
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -18,6 +20,9 @@ export interface CalendarEvent {
   isAllDay: boolean;
   location?: string;
   description?: string;
+  source?: 'shifter' | 'mock' | 'manual' | string;
+  shiftType?: ShiftType;
+  badge?: string;
 }
 
 export interface Weather {

@@ -19,6 +19,15 @@ export const HOUSEHOLD_MEMBERS: Record<string, HouseholdMember> = {
     borderColor: '#B0D5C9',
     textColor: '#1B473A',
     initials: 'Sh'
+  },
+  sasha: {
+    id: 'sasha',
+    name: 'Sasha',
+    color: '#2D7A4D', // Evergreen
+    bgColor: '#EDF7F0',
+    borderColor: '#B5DCBF',
+    textColor: '#184D2E',
+    initials: 'S'
   }
 };
 

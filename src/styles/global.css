@@ -26,6 +26,28 @@
   /* Household Member Colors */
   --member-alex: #D96B52;
   --member-sham: #3B7A66;
+  --member-sasha: #2D7A4D;
+
+  /* Shifter Shift Canonical Colors (Light Mode) */
+  --shift-ld-color: #2D7A4D;
+  --shift-ld-bg: rgba(45, 122, 77, 0.08);
+  --shift-ld-border: rgba(45, 122, 77, 0.22);
+  --shift-ld-text: #1B4E31;
+
+  --shift-day-off-color: #C2841B;
+  --shift-day-off-bg: rgba(212, 148, 26, 0.085);
+  --shift-day-off-border: rgba(212, 148, 26, 0.22);
+  --shift-day-off-text: #784E06;
+
+  --shift-night-color: #386AA4;
+  --shift-night-bg: rgba(56, 106, 164, 0.085);
+  --shift-night-border: rgba(56, 106, 164, 0.22);
+  --shift-night-text: #1C3E68;
+
+  --shift-other-color: #8C6E50;
+  --shift-other-bg: rgba(140, 110, 80, 0.065);
+  --shift-other-border: rgba(140, 110, 80, 0.20);
+  --shift-other-text: #5A442E;
 
   /* Controls & Overlays */
   --control-hover: rgba(74, 58, 49, 0.05);
@@ -78,6 +100,28 @@ html[data-theme="dark"] {
   /* Household Member Colors (slightly lifted for dark-background contrast) */
   --member-alex: #E27962;
   --member-sham: #4E9B83;
+  --member-sasha: #4EAD77;
+
+  /* Shifter Shift Canonical Colors (Dark Mode) */
+  --shift-ld-color: #4EAD77;
+  --shift-ld-bg: rgba(78, 173, 119, 0.13);
+  --shift-ld-border: rgba(78, 173, 119, 0.25);
+  --shift-ld-text: #82D7A8;
+
+  --shift-day-off-color: #D9A443;
+  --shift-day-off-bg: rgba(217, 164, 67, 0.13);
+  --shift-day-off-border: rgba(217, 164, 67, 0.25);
+  --shift-day-off-text: #F3CA7E;
+
+  --shift-night-color: #558FCF;
+  --shift-night-bg: rgba(85, 143, 207, 0.14);
+  --shift-night-border: rgba(85, 143, 207, 0.25);
+  --shift-night-text: #96C1F2;
+
+  --shift-other-color: #AC937A;
+  --shift-other-bg: rgba(172, 147, 122, 0.10);
+  --shift-other-border: rgba(172, 147, 122, 0.22);
+  --shift-other-text: #D5C3B3;
 
   /* Controls & Overlays */
   --control-hover: rgba(255, 255, 255, 0.06);

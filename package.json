@@ -21,7 +21,8 @@
     "kiosk:boot": "bash scripts/start.sh --setup-boot",
     "kiosk:status": "bash scripts/start.sh --status",
     "daemon": "python3 daemon.py",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.7",

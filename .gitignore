@@ -36,3 +36,8 @@ data/photos/manifest.json
 # Daemon runtime state
 data/daemon.log
 data/daemon.pid
+
+# Shifter calendar data
+data/shifter/
+*.Shifter
+*.shifter

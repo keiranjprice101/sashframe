@@ -3,6 +3,7 @@
   import type { CalendarEvent, HouseholdMember } from '../lib/types';
   import { getStartOfWeek, getWeekDays, formatDateIso, isToday, addDays, formatWeekRange } from '../lib/dates';
   import { HOUSEHOLD_MEMBERS } from '../data/mock';
+  import { getDayShiftType, getShiftAccentColor } from '../lib/shifter-utils';
 
   interface Props {
     events: CalendarEvent[];
@@ -56,13 +57,29 @@
   <!-- 7-Day Columns Grid -->
   <div class="calendar-grid">
     {#each weekDays as day (day.toISOString())}
+      {@const iso = formatDateIso(day)}
       {@const { allDay, timed } = getEventsForDay(day)}
       {@const todayClass = isToday(day)}
+      {@const dayShift = getDayShiftType(events, iso)}
 
-      <div class="day-column" class:is-today={todayClass}>
+      <div 
+        class="day-column" 
+        class:is-today={todayClass}
+        class:shift-col-ld={dayShift === 'ld'}
+        class:shift-col-off={dayShift === 'day_off'}
+        class:shift-col-night={dayShift === 'night'}
+        class:shift-col-other={dayShift === 'other'}
+      >
         <!-- Day Header: Unboxed, typographic, editorial -->
         <div class="day-header">
-          <span class="day-name">{day.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+          <div class="day-header-top">
+            <span class="day-name">{day.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+            {#if dayShift}
+              <span class="week-shift-pill shift-badge-{dayShift}">
+                {#if dayShift === 'ld'}LD{:else if dayShift === 'day_off'}Off{:else if dayShift === 'night'}Night{:else}Shift{/if}
+              </span>
+            {/if}
+          </div>
           <div class="day-number" class:active-today={todayClass}>
             {day.getDate()}
           </div>
@@ -75,10 +92,11 @@
             <div class="all-day-section">
               {#each allDay as event (event.id)}
                 {@const member = members[event.memberId] || members.alex}
+                {@const accentColor = event.shiftType ? getShiftAccentColor(event.shiftType) : (event.color || `var(--member-${event.memberId}, ${member.color})`)}
                 <div class="schedule-entry all-day-entry">
                   <span class="entry-time-label">All day</span>
                   <div class="entry-title-row">
-                    <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
+                    <span class="accent-bar" style="background-color: {accentColor}"></span>
                     <span class="entry-title">{event.title}</span>
                   </div>
                   {#if event.location}
@@ -93,6 +111,7 @@
           <div class="timed-events-list">
             {#each timed as event (event.id)}
               {@const member = members[event.memberId] || members.alex}
+              {@const accentColor = event.shiftType ? getShiftAccentColor(event.shiftType) : (event.color || `var(--member-${event.memberId}, ${member.color})`)}
               <div class="schedule-entry timed-entry">
                 <div class="entry-time-label">
                   {event.startTime}
@@ -101,7 +120,7 @@
                   {/if}
                 </div>
                 <div class="entry-title-row">
-                  <span class="accent-bar" style="background-color: var(--member-{event.memberId}, {member.color})"></span>
+                  <span class="accent-bar" style="background-color: {accentColor}"></span>
                   <span class="entry-title">{event.title}</span>
                 </div>
                 {#if event.location}
@@ -173,6 +192,20 @@
     background-color: var(--bg-surface-elevated);
   }
 
+  /* Shifter Shift Day Column Tinting */
+  .day-column.shift-col-ld {
+    background-color: var(--shift-ld-bg);
+  }
+  .day-column.shift-col-off {
+    background-color: var(--shift-day-off-bg);
+  }
+  .day-column.shift-col-night {
+    background-color: var(--shift-night-bg);
+  }
+  .day-column.shift-col-other {
+    background-color: var(--shift-other-bg);
+  }
+
   /* Day Header */
   .day-header {
     display: flex;
@@ -183,6 +216,61 @@
     border-bottom: 1px solid var(--border-hairline);
     gap: 0.35rem;
     flex-shrink: 0;
+  }
+
+  .day-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  /* Week shift pill in day header */
+  .week-shift-pill {
+    font-size: 0.65rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.12rem 0.4rem;
+    border-radius: var(--radius-sm);
+    line-height: 1.1;
+  }
+
+  .week-shift-pill.shift-badge-ld {
+    color: var(--shift-ld-text);
+    background-color: rgba(45, 122, 77, 0.14);
+    border: 1px solid var(--shift-ld-border);
+  }
+
+  .week-shift-pill.shift-badge-day_off {
+    color: var(--shift-day-off-text);
+    background-color: rgba(212, 148, 26, 0.14);
+    border: 1px solid var(--shift-day-off-border);
+  }
+
+  .week-shift-pill.shift-badge-night {
+    color: var(--shift-night-text);
+    background-color: rgba(56, 106, 164, 0.14);
+    border: 1px solid var(--shift-night-border);
+  }
+
+  .week-shift-pill.shift-badge-other {
+    color: var(--shift-other-text);
+    background-color: rgba(140, 110, 80, 0.12);
+    border: 1px solid var(--shift-other-border);
+  }
+
+  :global(html[data-theme="dark"]) .week-shift-pill.shift-badge-ld {
+    background-color: rgba(78, 173, 119, 0.20);
+  }
+  :global(html[data-theme="dark"]) .week-shift-pill.shift-badge-day_off {
+    background-color: rgba(217, 164, 67, 0.20);
+  }
+  :global(html[data-theme="dark"]) .week-shift-pill.shift-badge-night {
+    background-color: rgba(85, 143, 207, 0.22);
+  }
+  :global(html[data-theme="dark"]) .week-shift-pill.shift-badge-other {
+    background-color: rgba(172, 147, 122, 0.18);
   }
 
   .day-name {
