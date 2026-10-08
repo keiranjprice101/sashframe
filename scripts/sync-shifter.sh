@@ -79,7 +79,6 @@ RCLONE_ARGS+=(
   "--include" "*.Shifter"
   "--include" "*.shifter"
   "--update"
-  "--use-mtime"
 )
 
 # 5. Determine remote target path
