@@ -1,8 +1,8 @@
 [Unit]
 Description=Sashframe Kiosk Display
 Documentation=https://github.com/keiranjprice101/sashframe
-Wants=network-online.target docker.service
-After=network-online.target docker.service time-sync.target systemd-user-sessions.service
+Wants=network-online.target docker.service sashframe-boot-build.service
+After=network-online.target docker.service sashframe-boot-build.service time-sync.target systemd-user-sessions.service
 Conflicts=getty@tty1.service
 After=getty@tty1.service
 

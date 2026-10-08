@@ -95,6 +95,7 @@ ensure_systemd_units_installed() {
     fi
   }
 
+  install_unit_if_missing "sashframe-boot-build.service"
   install_unit_if_missing "sashframe-kiosk.service"
   install_unit_if_missing "sashframe-photo-sync.service"
   install_unit_if_missing "sashframe-photo-sync.timer"
@@ -122,6 +123,9 @@ setup_boot_autostart() {
   run_as_root systemctl enable docker 2>/dev/null || true
   run_as_root systemctl start docker 2>/dev/null || true
 
+  echo "Enabling power-on Docker build service..."
+  run_as_root systemctl enable sashframe-boot-build.service 2>/dev/null || true
+
   echo "Enabling auto-updater timer..."
   run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
 
@@ -137,6 +141,7 @@ setup_boot_autostart() {
   echo ""
   echo "✓ Sashframe is now configured to start automatically on power-on:"
   echo "  - Docker daemon (application containers)"
+  echo "  - Power-on Docker build (sashframe-boot-build.service)"
   echo "  - Photo sync timer (sashframe-photo-sync.timer)"
   echo "  - Shifter calendar sync timer (sashframe-shifter-sync.timer)"
   echo "  - Auto-updater timer (sashframe-updater.timer)"
@@ -165,8 +170,17 @@ start_docker_stack() {
     fi
   fi
 
-  echo "[Docker] Ensuring Sashframe application containers are running..."
-  "${COMPOSE_CMD[@]}" up -d
+  GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
+
+  # Build Docker images on startup if not already built during this boot session
+  if [ ! -f "/run/sashframe-boot-built" ]; then
+    echo "[Docker] Building Sashframe application images for tag '${GIT_SHA}'..."
+    IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" build
+    touch "/run/sashframe-boot-built" 2>/dev/null || true
+  fi
+
+  echo "[Docker] Ensuring Sashframe application containers are running (${GIT_SHA})..."
+  IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" up -d --remove-orphans
 }
 
 # Ensure background timers are active

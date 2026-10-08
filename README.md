@@ -16,6 +16,7 @@ Sashframe divides responsibilities cleanly between the Raspberry Pi host OS and 
 ```text
 Raspberry Pi Host (Raspberry Pi OS Lite)
 ├── Systemd Host Services & Timers
+│   ├── sashframe-boot-build.service  # Rebuilds & launches Docker Compose images on power-on
 │   ├── sashframe-kiosk.service       # Launches Chromium under Cage on tty1 on boot
 │   ├── sashframe-updater.timer       # Polls GitHub origin/main every 5 min, builds & deploys
 │   ├── sashframe-photo-sync.timer    # Runs rclone sync for photos from Google Drive every 5 min

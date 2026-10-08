@@ -1,0 +1,21 @@
+[Unit]
+Description=Sashframe Power-On Docker Image Build & Start
+Documentation=https://github.com/keiranjprice101/sashframe
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+Before=sashframe-kiosk.service
+
+[Service]
+Type=oneshot
+User=@INSTALL_USER@
+WorkingDirectory=@REPO_ROOT@
+EnvironmentFile=-/etc/sashframe/sashframe.env
+EnvironmentFile=-/etc/home-calendar/home-calendar.env
+ExecStart=/bin/bash @REPO_ROOT@/scripts/boot-build.sh
+RemainAfterExit=yes
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
