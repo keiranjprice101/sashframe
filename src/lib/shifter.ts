@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite';
 import type { CalendarEvent } from './types';
 import {
   parseShifterFecha,
@@ -12,6 +13,18 @@ import {
 } from './shifter-utils.ts';
 
 export * from './shifter-utils.ts';
+
+const require = createRequire(import.meta.url);
+
+export function getDatabaseSync(): typeof DatabaseSyncType | null {
+  try {
+    const sqlite = require('node:sqlite');
+    return sqlite.DatabaseSync || null;
+  } catch (err) {
+    console.warn('[Shifter] Native node:sqlite not available:', err);
+    return null;
+  }
+}
 
 /**
  * In-memory pool of events across reloads.
@@ -108,7 +121,7 @@ export function getShifterFilePath(): string | null {
 /**
  * Extracts all shift definitions from tablaTurnos.
  */
-export function getShiftDefinitions(db: DatabaseSync): Map<number, RawShiftDefinition> {
+export function getShiftDefinitions(db: DatabaseSyncType | any): Map<number, RawShiftDefinition> {
   const map = new Map<number, RawShiftDefinition>();
   try {
     const rows = db.prepare('SELECT * FROM tablaTurnos').all() as unknown as RawShiftDefinition[];
@@ -130,8 +143,14 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
     return [];
   }
 
+  const DatabaseSyncClass = getDatabaseSync();
+  if (!DatabaseSyncClass) {
+    console.warn(`[Shifter] Cannot parse '${filePath}': node:sqlite is unavailable.`);
+    return [];
+  }
+
   // Enforce read-only access
-  const db = new DatabaseSync(filePath, { readOnly: true });
+  const db = new DatabaseSyncClass(filePath, { readOnly: true });
 
   try {
     const shiftDefs = getShiftDefinitions(db);

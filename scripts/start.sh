@@ -98,6 +98,8 @@ ensure_systemd_units_installed() {
   install_unit_if_missing "sashframe-kiosk.service"
   install_unit_if_missing "sashframe-photo-sync.service"
   install_unit_if_missing "sashframe-photo-sync.timer"
+  install_unit_if_missing "sashframe-shifter-sync.service"
+  install_unit_if_missing "sashframe-shifter-sync.timer"
   install_unit_if_missing "sashframe-updater.service"
   install_unit_if_missing "sashframe-updater.timer"
 }
@@ -126,6 +128,9 @@ setup_boot_autostart() {
   echo "Enabling photo sync timer..."
   run_as_root systemctl enable --now sashframe-photo-sync.timer 2>/dev/null || true
 
+  echo "Enabling shifter calendar sync timer..."
+  run_as_root systemctl enable --now sashframe-shifter-sync.timer 2>/dev/null || true
+
   echo "Enabling kiosk display service..."
   run_as_root systemctl enable sashframe-kiosk.service 2>/dev/null || true
 
@@ -133,6 +138,7 @@ setup_boot_autostart() {
   echo "✓ Sashframe is now configured to start automatically on power-on:"
   echo "  - Docker daemon (application containers)"
   echo "  - Photo sync timer (sashframe-photo-sync.timer)"
+  echo "  - Shifter calendar sync timer (sashframe-shifter-sync.timer)"
   echo "  - Auto-updater timer (sashframe-updater.timer)"
   echo "  - Kiosk display on tty1 (sashframe-kiosk.service)"
   echo "=========================================="

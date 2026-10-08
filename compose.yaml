@@ -12,6 +12,7 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=4321
+      - NODE_OPTIONS=--experimental-sqlite
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - PHOTO_OUTPUT_DIR=/data/photos/processed
@@ -20,7 +21,7 @@ services:
       - SHIFTER_FILE_PATH=/data/calendar/calendar.Shifter
     volumes:
       - ${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}:/data/photos:ro
-      - ${SASHFRAME_CALENDAR_DIR:-/var/lib/sashframe/calendar}:/data/calendar:ro
+      - ${SASHFRAME_CALENDAR_DIR:-${SHIFTER_INPUT_DIR:-/var/lib/sashframe/calendar}}:/data/calendar:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4321/health"]
       interval: 15s

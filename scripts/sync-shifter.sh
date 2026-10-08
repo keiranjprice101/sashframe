@@ -114,6 +114,7 @@ for file in "$STAGING_DIR"/*; do
       # Atomically copy with original filename into calendar directory
       cp -f "$file" "${SHIFTER_INPUT_DIR}/${BASENAME}.tmp"
       mv -f "${SHIFTER_INPUT_DIR}/${BASENAME}.tmp" "${SHIFTER_INPUT_DIR}/${BASENAME}"
+      chmod 644 "${SHIFTER_INPUT_DIR}/${BASENAME}" 2>/dev/null || true
 
       # Track the most recent file
       FILE_TIME="$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null || echo 0)"
@@ -129,6 +130,8 @@ if [ -n "$NEWEST_FILE" ] && [ -f "$NEWEST_FILE" ]; then
   # Atomically update canonical calendar.Shifter file
   cp -f "$NEWEST_FILE" "${TARGET_FILE}.tmp"
   mv -f "${TARGET_FILE}.tmp" "${TARGET_FILE}"
+  chmod 644 "${TARGET_FILE}" 2>/dev/null || true
+  chmod 755 "${SHIFTER_INPUT_DIR}" 2>/dev/null || true
   echo "[Sync] Successfully published ${FOUND_COUNT} Shifter file(s). Active target set to '${TARGET_FILE}' (from '$(basename "$NEWEST_FILE")')."
 else
   echo "[Sync] No .Shifter files found in remote target '${REMOTE_TARGET}'."

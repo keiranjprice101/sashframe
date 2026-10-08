@@ -139,6 +139,13 @@ if check_health; then
   elif command -v podman >/dev/null 2>&1; then
     podman image prune -f >/dev/null 2>&1 || true
   fi
+
+  # Refresh kiosk display if running
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet sashframe-kiosk.service 2>/dev/null; then
+    log "Restarting sashframe-kiosk.service to display updated interface..."
+    sudo systemctl restart sashframe-kiosk.service 2>/dev/null || true
+  fi
+
   exit 0
 else
   log "Error: Health check failed for ${TARGET_TAG}! Initiating automatic rollback..."

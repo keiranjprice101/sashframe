@@ -43,7 +43,8 @@ RUN chmod +x ./docker/entrypoint-app.sh
 # Set production environment variables
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=4321
+    PORT=4321 \
+    NODE_OPTIONS="--experimental-sqlite"
 
 EXPOSE 4321
 
