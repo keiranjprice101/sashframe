@@ -99,10 +99,10 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 Local development does not require Docker. Developers use repo-local paths (`data/photos/...`) and standard Node / Python tooling:
 
 ```bash
-# 1. Install dependencies (.venv + npm)
-npm run setup
+# 1. Install dependencies
+npm install
 
-# 2. Process photos in batch (after adding/editing images in data/photos/incoming/)
+# 2. Process photos in batch (after adding images to data/photos/incoming/)
 npm run photos:process
 
 # 3. Start Astro dev server
@@ -370,23 +370,6 @@ Google Drive Shifter folder ID is configured declaratively in `ansible/local.yml
 
 ---
 
-## 📋 TODO & Roadmap
+## 📋 Roadmap
 
-### 🔄 Photo Pipeline & Integrations
-- [x] **Deterministic Batch Photo Pipeline**: One-shot batch image processing (`npm run photos:process`) and Fisher-Yates cycle-safe shuffle-bag slideshow with boundary repeat avoidance.
-- [x] **Google Drive / rclone Sync**: Automated Raspberry Pi provisioning, systemd sync timer, and guided OAuth helper.
-- [x] **Dockerized Production Architecture**: Docker Compose application services with least-privilege non-root execution and healthchecks.
-- [x] **Automated Git Updater & Rollback**: Host systemd timer polling GitHub, building SHA-tagged images, verifying `/health`, and auto-rolling back if unhealthy.
-- [ ] **HEIC / HEIF Format Support**: Add `pillow-heif` support once system libraries (`libheif`) are available.
-- [ ] **Local Photo Reader**: Integration with Immich or local network folder (Syncthing/SMB).
-
-### 📅 Calendar & Weather Integrations
-- [x] **Shifter Calendar Import**: Server-side read-only SQLite parser, 0-indexed month conversion, LD/Day Off/Night styling, and cumulative pooling.
-- [x] **Shifter Google Drive Sync**: Host systemd timer (`sashframe-shifter-sync.timer`) running every 5 minutes with service account authentication.
-- [ ] **External Calendar Synchronization**: Connect to CalDAV / iCal feeds, Google Calendar, or Apple iCloud API.
-- [x] **Live Weather Feed**: Integrated Open-Meteo authless API with WMO condition mapping.
-- [ ] **Configurable Weather Location & Display Settings**: Dynamically configure weather forecast coordinates via `sashframe.env` (`WEATHER_LATITUDE`, `WEATHER_LONGITUDE`).
-
-### 🖥️ Hardware & Kiosk
-- [x] **Raspberry Pi Chromium Kiosk**: Wayland/Cage or Chromium kiosk autostart script (`--kiosk --incognito`) & systemd service.
-- [ ] **Display Power Management**: Bedtime screen dimming schedule to preserve display lifespan.
+- [ ] **Google Calendar Support**: Direct Google Calendar API synchronization as a first-class event source alongside or superseding manual `.Shifter` SQLite exports.
