@@ -124,11 +124,11 @@ Individual dev tasks:
 
 ---
 
-### 🤖 Host Provisioning with Ansible (Base Foundation)
+### 🤖 Host Provisioning & Configuration with Ansible
 
-Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS machine state (packages, application users/groups, Docker Engine, rclone, Cage, Chromium, and canonical directory structure).
+Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS machine state (packages, application users/groups, Docker Engine, rclone, Cage, Chromium, and canonical directory structure) as well as installation-specific configuration and Google credential deployment.
 
-> **Current Migration Status**: At this stage Ansible provisions only the base host. Existing scripts (`scripts/install.sh`, `scripts/setup-google-drive.sh`, `scripts/start.sh`) still provision Sashframe-specific services/configuration and will be migrated in later tasks.
+> **Current Migration Status**: Ansible currently provisions the base host, installs Google credentials securely (`/etc/sashframe/credentials/google-drive.json`), manages timezone and coordinates, templates `/etc/sashframe/household.json`, and generates `/etc/sashframe/sashframe.env`. Existing scripts (`scripts/install.sh`, `scripts/setup-google-drive.sh`, `scripts/start.sh`) still register and manage Sashframe systemd services and will be migrated in later tasks.
 
 #### 1. Controller Requirements
 - Ansible Core 2.15+ (tested on Ansible 2.21+)
@@ -150,8 +150,20 @@ all:
       ansible_port: 22
 ```
 
-#### 3. Configuration & User Customization
-Defaults are configured in `ansible/roles/base/defaults/main.yml`. You can override variables such as `sashframe_user` and `sashframe_group` (default `sham`) in `ansible/group_vars/all.yml` or your inventory.
+#### 3. Local Installation Configuration (`local.yml`)
+Copy `ansible/local.example.yml` to `ansible/local.yml` (this file is gitignored):
+```bash
+cp ansible/local.example.yml ansible/local.yml
+```
+Fill in your appliance installation values:
+- `sashframe_photo_drive_folder_id`: Google Drive Photo folder ID
+- `sashframe_shifter_drive_folder_id`: Google Drive Shifter calendar folder ID
+- `sashframe_google_service_account_src`: Path to your Google Service Account JSON file on the controller machine (the file remains on the controller and is copied securely by Ansible; never committed to git)
+- `sashframe_timezone`: e.g. `Europe/London`
+- `sashframe_latitude` & `sashframe_longitude`: Geographical coordinates
+- `sashframe_household`: List of household members (`id`, `name`, `color`)
+
+*Note*: If any required installation variable is omitted from `local.yml`, the playbook interactively prompts for it.
 
 #### 4. Test Connectivity
 Verify SSH and Python connectivity to the Pi:
@@ -169,12 +181,20 @@ ansible-playbook --syntax-check -i ansible/inventory.yml ansible/site.yml
 ansible-playbook --check -i ansible/inventory.yml ansible/site.yml
 ```
 
-#### 6. Provision the Base Host
-Execute the base playbook:
+#### 6. Provision Host & Configuration
+Execute the playbook:
 ```bash
 ansible-playbook -i ansible/inventory.yml ansible/site.yml
 ```
 *Note*: If the target user requires a password for sudo, pass `--ask-become-pass` (or `-K`).
+
+What this does:
+1. Validates controller-side service-account JSON structure and configuration variables.
+2. Backs up existing `/etc/sashframe/sashframe.env` to `/etc/sashframe/sashframe.env.pre-ansible` on first migration.
+3. Installs the Google service account credential to `/etc/sashframe/credentials/google-drive.json` with secure permissions (`0640` `root:sham`).
+4. Generates deterministic `/etc/sashframe/household.json` (`0640` `root:sham`).
+5. Generates canonical `/etc/sashframe/sashframe.env` (`0640` `root:sham`) preserving all runtime keys.
+6. Sets host timezone (`community.general.timezone`).
 
 #### 7. Verify Idempotency
 Run the playbook a second time to ensure zero unintended changes:

@@ -1,6 +1,6 @@
 ---
 # ==============================================================================
-# Sashframe Base Host Provisioning Tasks
+# Sashframe Base Host & Configuration Provisioning Tasks
 # ==============================================================================
 
 # 1. Preflight Validations
@@ -26,6 +26,54 @@
       - sashframe_user | length > 0
     fail_msg: "Invalid base variable definitions detected."
     success_msg: "Base paths and user definitions validated."
+
+- name: Validate installation configuration variables
+  ansible.builtin.assert:
+    that:
+      - sashframe_photo_drive_folder_id is string and sashframe_photo_drive_folder_id | length > 0
+      - sashframe_shifter_drive_folder_id is string and sashframe_shifter_drive_folder_id | length > 0
+      - sashframe_timezone is string and sashframe_timezone | length > 0
+      - sashframe_latitude is number and sashframe_latitude >= -90 and sashframe_latitude <= 90
+      - sashframe_longitude is number and sashframe_longitude >= -180 and sashframe_longitude <= 180
+      - sashframe_household is iterable and sashframe_household | length > 0
+    fail_msg: "Invalid or missing installation configuration variables. Please check local.yml or extra-vars."
+    success_msg: "Installation configuration variables validated."
+
+- name: Validate household member uniqueness
+  ansible.builtin.assert:
+    that:
+      - (sashframe_household | map(attribute='id') | list | length) == (sashframe_household | map(attribute='id') | unique | list | length)
+    fail_msg: "Household member IDs must be non-empty and unique."
+    success_msg: "Household members validated."
+
+- name: Check controller-side service-account file
+  ansible.builtin.stat:
+    path: "{{ sashframe_google_service_account_src }}"
+  delegate_to: localhost
+  become: false
+  register: sa_src_stat
+
+- name: Validate controller-side service-account file existence
+  ansible.builtin.assert:
+    that:
+      - sa_src_stat.stat.exists
+      - sa_src_stat.stat.isreg
+    fail_msg: "Google service-account file '{{ sashframe_google_service_account_src }}' does not exist or is not a regular file on the controller."
+    success_msg: "Controller-side service-account file exists."
+
+- name: Validate service-account JSON structure
+  vars:
+    sa_json: "{{ lookup('file', sashframe_google_service_account_src) | from_json }}"
+  ansible.builtin.assert:
+    that:
+      - sa_json.type == 'service_account'
+      - sa_json.client_email is defined and sa_json.client_email | length > 0
+      - sa_json.private_key is defined and sa_json.private_key | length > 0
+    fail_msg: "Service account file is not a valid Google service account JSON."
+    success_msg: "Service account JSON structure validated."
+  no_log: true
+  delegate_to: localhost
+  become: false
 
 # 2. User & Group Management
 - name: Ensure required system device groups exist
@@ -68,11 +116,11 @@
 # 5. Canonical Data Directory Hierarchy (/var/lib/sashframe)
 - name: Ensure canonical persistent data directory hierarchy exists
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path if item is mapping else item }}"
     state: directory
     owner: "{{ sashframe_user }}"
     group: "{{ sashframe_group }}"
-    mode: "0755"
+    mode: "{{ item.mode if item is mapping else '0755' }}"
   loop: "{{ sashframe_data_directories }}"
 
 # 6. Canonical Configuration Directory Hierarchy (/etc/sashframe)
@@ -110,3 +158,88 @@
   ansible.builtin.command: which chromium
   register: chromium_path_output
   changed_when: false
+
+# 8. System Timezone Configuration
+- name: Ensure appliance host timezone is configured
+  community.general.timezone:
+    name: "{{ sashframe_timezone }}"
+
+# 9. Pre-Ansible Backup of Existing Configuration
+- name: Check if existing unmanaged sashframe.env exists
+  ansible.builtin.stat:
+    path: "{{ sashframe_config_root }}/sashframe.env"
+  register: existing_env_stat
+
+- name: Check if pre-Ansible backup already exists
+  ansible.builtin.stat:
+    path: "{{ sashframe_env_backup_path }}"
+  register: backup_env_stat
+
+- name: Create pre-Ansible backup of sashframe.env
+  ansible.builtin.copy:
+    src: "{{ sashframe_config_root }}/sashframe.env"
+    dest: "{{ sashframe_env_backup_path }}"
+    remote_src: true
+    owner: root
+    group: "{{ sashframe_group }}"
+    mode: "0640"
+  when: existing_env_stat.stat.exists and not backup_env_stat.stat.exists
+
+# 10. Secure Google Service Account Credential Installation
+- name: Install Google service account credential securely
+  ansible.builtin.copy:
+    src: "{{ sashframe_google_service_account_src }}"
+    dest: "{{ sashframe_google_service_account_dest }}"
+    owner: root
+    group: "{{ sashframe_group }}"
+    mode: "0640"
+  no_log: true
+
+# 11. Household Configuration File Generation
+- name: Generate canonical household configuration file
+  ansible.builtin.template:
+    src: household.json.j2
+    dest: "{{ sashframe_household_config_dest }}"
+    owner: root
+    group: "{{ sashframe_group }}"
+    mode: "0640"
+
+# 12. Central Environment Configuration File Generation
+- name: Generate canonical sashframe.env configuration file
+  ansible.builtin.template:
+    src: sashframe.env.j2
+    dest: "{{ sashframe_config_root }}/sashframe.env"
+    owner: root
+    group: "{{ sashframe_group }}"
+    mode: "0640"
+
+# 13. Verification of Installed Credentials & Configuration
+- name: Verify installed service-account file exists and has correct permissions
+  ansible.builtin.stat:
+    path: "{{ sashframe_google_service_account_dest }}"
+  register: installed_sa_stat
+
+- name: Assert installed service-account credential integrity
+  ansible.builtin.assert:
+    that:
+      - installed_sa_stat.stat.exists
+      - installed_sa_stat.stat.isreg
+      - installed_sa_stat.stat.mode == '0640'
+    fail_msg: "Installed service-account credential validation failed."
+    success_msg: "Installed service-account credential integrity verified."
+  when: not ansible_check_mode
+
+- name: Verify installed sashframe.env exists and has correct permissions
+  ansible.builtin.stat:
+    path: "{{ sashframe_config_root }}/sashframe.env"
+  register: installed_env_stat
+
+- name: Assert installed sashframe.env integrity
+  ansible.builtin.assert:
+    that:
+      - installed_env_stat.stat.exists
+      - installed_env_stat.stat.isreg
+      - installed_env_stat.stat.mode == '0640'
+    fail_msg: "Installed sashframe.env validation failed."
+    success_msg: "Installed sashframe.env integrity verified."
+  when: not ansible_check_mode

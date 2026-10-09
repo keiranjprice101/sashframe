@@ -1,7 +1,62 @@
 ---
-- name: Provision Sashframe Base Host
+- name: Provision Sashframe Base Host and Configuration
   hosts: all
   become: true
   gather_facts: true
+
+  pre_tasks:
+    # 1. Load local installation variables if present
+    - name: Check for local installation variables file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/local.yml"
+      delegate_to: localhost
+      become: false
+      register: local_vars_file_stat
+
+    - name: Load local installation variables
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/local.yml"
+      when: local_vars_file_stat.stat.exists
+
+    # 2. Interactive prompting for required values if missing
+    - name: Prompt for Google Drive Photo folder ID
+      ansible.builtin.pause:
+        prompt: "Enter Google Drive Photo Folder ID"
+      register: prompt_photo_folder_id
+      delegate_to: localhost
+      become: false
+      when: sashframe_photo_drive_folder_id is not defined or sashframe_photo_drive_folder_id == ''
+
+    - name: Set photo folder ID from prompt
+      ansible.builtin.set_fact:
+        sashframe_photo_drive_folder_id: "{{ prompt_photo_folder_id.user_input | trim }}"
+      when: prompt_photo_folder_id is not skipped
+
+    - name: Prompt for Google Drive Shifter folder ID
+      ansible.builtin.pause:
+        prompt: "Enter Google Drive Shifter Folder ID"
+      register: prompt_shifter_folder_id
+      delegate_to: localhost
+      become: false
+      when: sashframe_shifter_drive_folder_id is not defined or sashframe_shifter_drive_folder_id == ''
+
+    - name: Set shifter folder ID from prompt
+      ansible.builtin.set_fact:
+        sashframe_shifter_drive_folder_id: "{{ prompt_shifter_folder_id.user_input | trim }}"
+      when: prompt_shifter_folder_id is not skipped
+
+    - name: Prompt for path to Google service-account JSON on controller
+      ansible.builtin.pause:
+        prompt: "Enter path to Google service-account JSON on controller"
+      register: prompt_sa_src
+      delegate_to: localhost
+      become: false
+      when: sashframe_google_service_account_src is not defined or sashframe_google_service_account_src == ''
+
+    - name: Set service-account source path from prompt
+      ansible.builtin.set_fact:
+        sashframe_google_service_account_src: "{{ prompt_sa_src.user_input | trim }}"
+      when: prompt_sa_src is not skipped
+
   roles:
     - role: base

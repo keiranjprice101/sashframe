@@ -1,0 +1,28 @@
+---
+# Sashframe Local Installation Variables (Template)
+# Copy this file to ansible/local.yml (which is gitignored) and customize for your appliance.
+
+# Google Drive Photo and Shifter Folder IDs
+sashframe_photo_drive_folder_id: "YOUR_GOOGLE_DRIVE_PHOTO_FOLDER_ID"
+sashframe_shifter_drive_folder_id: "YOUR_GOOGLE_DRIVE_SHIFTER_FOLDER_ID"
+
+# Path to the Google Service Account JSON file on your Ansible controller machine
+# (Do NOT commit the JSON file to git; provide its local path here)
+sashframe_google_service_account_src: "/path/to/google-service-account.json"
+
+# Appliance Timezone & Geographical Coordinates
+sashframe_timezone: "Europe/London"
+sashframe_latitude: 51.453
+sashframe_longitude: -0.902
+
+# Household Members Configuration
+sashframe_household:
+  - id: "sasha"
+    name: "Sasha"
+    color: "#2D7A4D"
+  - id: "sham"
+    name: "Sham"
+    color: "#3B7A66"
+  - id: "alex"
+    name: "Alex"
+    color: "#D96B52"

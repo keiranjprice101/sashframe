@@ -45,5 +45,7 @@ data/shifter/
 # Ansible local inventory and runtime files
 ansible/inventory.yml
 ansible/inventory.yaml
+ansible/local.yml
+ansible/local.yaml
 ansible/*.retry
 ansible/.vault-pass

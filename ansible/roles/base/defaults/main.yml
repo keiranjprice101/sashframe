@@ -14,14 +14,22 @@ sashframe_config_root: "/etc/sashframe"
 
 # Canonical Runtime Data Directories under /var/lib/sashframe
 sashframe_data_directories:
-  - "{{ sashframe_data_root }}"
-  - "{{ sashframe_data_root }}/photos"
-  - "{{ sashframe_data_root }}/photos/incoming"
-  - "{{ sashframe_data_root }}/photos/processed"
-  - "{{ sashframe_data_root }}/calendar"
-  - "{{ sashframe_data_root }}/calendar/incoming"
-  - "{{ sashframe_data_root }}/state"
-  - "{{ sashframe_data_root }}/database"
+  - path: "{{ sashframe_data_root }}"
+    mode: "0755"
+  - path: "{{ sashframe_data_root }}/photos"
+    mode: "0775"
+  - path: "{{ sashframe_data_root }}/photos/incoming"
+    mode: "0775"
+  - path: "{{ sashframe_data_root }}/photos/processed"
+    mode: "0775"
+  - path: "{{ sashframe_data_root }}/calendar"
+    mode: "0755"
+  - path: "{{ sashframe_data_root }}/calendar/incoming"
+    mode: "0755"
+  - path: "{{ sashframe_data_root }}/state"
+    mode: "0755"
+  - path: "{{ sashframe_data_root }}/database"
+    mode: "0755"
 
 # Configuration Directories under /etc/sashframe
 sashframe_config_directories:
@@ -52,3 +60,44 @@ sashframe_services:
   - name: docker
     state: started
     enabled: true
+
+# Appliance Timezone & Geographical Coordinates
+sashframe_timezone: "Europe/London"
+sashframe_latitude: 51.453
+sashframe_longitude: -0.902
+
+# Credential & Configuration Canonical Target Paths
+sashframe_google_service_account_dest: "{{ sashframe_config_root }}/credentials/google-drive.json"
+sashframe_household_config_dest: "{{ sashframe_config_root }}/household.json"
+sashframe_env_backup_path: "{{ sashframe_config_root }}/sashframe.env.pre-ansible"
+
+# Container User/Group Mapping
+sashframe_puid: 1000
+sashframe_pgid: 1000
+
+# Photo Processing Defaults
+sashframe_photo_max_size: 1920
+sashframe_photo_quality: 85
+
+# Rclone & Remote Defaults
+sashframe_rclone_remote: "gdrive"
+sashframe_rclone_photo_path: ""
+sashframe_rclone_config: "/home/{{ sashframe_user }}/.config/rclone/rclone.conf"
+sashframe_rclone_shifter_remote: "gdrive"
+
+# Default Household Configuration (Fallback/Example)
+sashframe_household:
+  - id: "sasha"
+    name: "Sasha"
+    color: "#2D7A4D"
+  - id: "sham"
+    name: "Sham"
+    color: "#3B7A66"
+  - id: "alex"
+    name: "Alex"
+    color: "#D96B52"
+
+# Installation-Specific Variables (Supplied via local.yml or extra-vars)
+sashframe_photo_drive_folder_id: ""
+sashframe_shifter_drive_folder_id: ""
+sashframe_google_service_account_src: ""
