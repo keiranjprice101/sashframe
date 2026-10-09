@@ -283,6 +283,7 @@ What this does:
      - `sashframe-shifter-sync.service` and `sashframe-shifter-sync.timer` (5-minute recurring calendar sync)
    - Reloads systemd daemon and manages enablement/active states.
    - Verifies systemd unit file integrity, timer state, kiosk state, and HTTP `/health` (200 OK).
+   - Automatically reboots the Raspberry Pi at the conclusion of provisioning to test the cold-boot lifecycle (photo ingestion, container startup, kiosk display) and verifies post-reboot `/health`. (Can be skipped via `-e sashframe_reboot_on_completion=false`).
 
 #### 8. Verify Idempotency
 Run the playbook a second time to ensure zero unintended changes:

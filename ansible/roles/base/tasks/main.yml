@@ -104,6 +104,7 @@
       - ca-certificates
       - curl
       - gnupg
+      - python3-debian
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -133,13 +134,15 @@
     components: stable
     architectures: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'armhf' if ansible_facts['architecture'] == 'armv7l' else 'amd64' }}"
     signed_by: "{{ sashframe_docker_keyring_path }}"
+    install_python_debian: true
     state: present
 
 - name: Install required system packages
   ansible.builtin.apt:
     name: "{{ sashframe_packages }}"
     state: present
-    update_cache: false
+    update_cache: true
+
 
 # 4. Service State Management
 - name: Ensure core host services are enabled and running

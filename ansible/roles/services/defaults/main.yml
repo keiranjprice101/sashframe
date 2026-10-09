@@ -63,3 +63,7 @@ sashframe_cursor_symlinks:
   - dnd-link
   - "0000816000000681000040808001010c"
   - "08e631cbe3823404b201215b04232244"
+
+# Host Reboot on Initial Provisioning Completion
+sashframe_reboot_on_completion: true
+sashframe_reboot_timeout: 300

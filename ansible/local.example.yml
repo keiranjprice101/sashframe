@@ -30,3 +30,6 @@ sashframe_household:
 # Optional: Application Repository Path Override (defaults to /home/{{ sashframe_user }}/sashframe)
 # sashframe_app_dir: "/home/sham/sashframe"
 
+# Optional: Automatically reboot appliance at the end of provisioning to start boot services (defaults to true)
+# sashframe_reboot_on_completion: true
+

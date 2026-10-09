@@ -246,3 +246,53 @@
       - health_resp.json.status == 'ok'
     fail_msg: "Application health check failed: {{ health_resp.content | default('no response') }}"
   when: not ansible_check_mode
+
+# 8. Host Reboot to Exercise Power-On Lifecycle (Photo Sync & Kiosk)
+- name: Reboot Sashframe host to complete initial provisioning and run boot services
+  ansible.builtin.reboot:
+    msg: "Rebooting Sashframe appliance after successful provisioning to initiate power-on services."
+    reboot_timeout: "{{ sashframe_reboot_timeout }}"
+    post_reboot_delay: 15
+  when:
+    - not ansible_check_mode
+    - sashframe_reboot_on_completion | default(true) | bool
+
+- name: Wait for application health endpoint post-reboot
+  ansible.builtin.uri:
+    url: "{{ sashframe_health_url }}"
+    status_code: 200
+    return_content: true
+  register: post_reboot_health
+  retries: 30
+  delay: 5
+  until: post_reboot_health.status == 200
+  when:
+    - not ansible_check_mode
+    - sashframe_reboot_on_completion | default(true) | bool
+
+- name: Assert post-reboot application health response
+  ansible.builtin.assert:
+    that:
+      - post_reboot_health.json.status == 'ok'
+    fail_msg: "Application is not healthy post-reboot: {{ post_reboot_health.content | default('no response') }}"
+  when:
+    - not ansible_check_mode
+    - sashframe_reboot_on_completion | default(true) | bool
+
+- name: Verify kiosk service is active post-reboot
+  ansible.builtin.command: systemctl is-active sashframe-kiosk.service
+  register: post_reboot_kiosk_status
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - sashframe_reboot_on_completion | default(true) | bool
+
+- name: Assert kiosk service is active post-reboot
+  ansible.builtin.assert:
+    that:
+      - post_reboot_kiosk_status.stdout == 'active'
+    fail_msg: "sashframe-kiosk.service is not active post-reboot!"
+  when:
+    - not ansible_check_mode
+    - sashframe_reboot_on_completion | default(true) | bool
+
