@@ -212,7 +212,7 @@ Sashframe provides a unified startup manager (`scripts/start.sh` / `npm start`) 
 docker compose ps
 # or: npm run prod:ps
 
-# View live logs from app and photo processor
+# View live logs from app
 docker compose logs -f
 # or: npm run prod:logs
 
@@ -333,6 +333,7 @@ To set up Shifter synchronization with your Google Drive Folder ID:
 ## 📋 TODO & Roadmap
 
 ### 🔄 Photo Pipeline & Integrations
+- [x] **Deterministic Batch Photo Pipeline**: One-shot batch image processing (`npm run photos:process`) and Fisher-Yates cycle-safe shuffle-bag slideshow with boundary repeat avoidance.
 - [x] **Google Drive / rclone Sync**: Automated Raspberry Pi provisioning, systemd sync timer, and guided OAuth helper.
 - [x] **Dockerized Production Architecture**: Docker Compose application services with least-privilege non-root execution and healthchecks.
 - [x] **Automated Git Updater & Rollback**: Host systemd timer polling GitHub, building SHA-tagged images, verifying `/health`, and auto-rolling back if unhealthy.
