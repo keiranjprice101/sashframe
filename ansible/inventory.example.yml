@@ -4,3 +4,6 @@ all:
       ansible_host: raspberrypi.local
       ansible_user: sham
       ansible_port: 22
+      # Optional: SSH / sudo password auth (requires sshpass installed on controller):
+      # ansible_password: "your_password"
+      # ansible_become_password: "your_password"

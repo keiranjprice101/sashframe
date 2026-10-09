@@ -134,6 +134,7 @@ Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS
 - Ansible Core 2.15+ (tested on Ansible 2.21+)
 - Python 3.10+
 - Network/SSH access to the target Raspberry Pi
+- `sshpass` *(optional — only required if using password authentication flags `-k` / `--ask-pass` instead of SSH keys)*
 
 #### 2. Google Service Account Setup (`sa.json`)
 Sashframe uses an authless, headless Google Service Account to download photos and the `.Shifter` calendar SQLite file from Google Drive via `rclone`:
@@ -160,6 +161,9 @@ all:
       ansible_host: 192.168.4.72   # or sashframe.local
       ansible_user: sham
       ansible_port: 22
+      # Optional: SSH / sudo password auth (requires sshpass installed on controller):
+      # ansible_password: "your_password"
+      # ansible_become_password: "your_password"
 ```
 
 #### 4. Local Installation Configuration (`local.yml`)
@@ -197,11 +201,35 @@ sashframe_household:
 
 *Note*: If `sashframe_google_service_account_src` or folder IDs are omitted from `local.yml`, the playbook will interactively prompt for them when executed.
 
-#### 5. Test Connectivity
-Verify SSH and Python connectivity to the Pi:
+#### 5. Test Connectivity (SSH Authentication)
+
+On a freshly reimaged Raspberry Pi, choose one of two ways to authenticate:
+
+##### Option A: Copy Controller Public SSH Key (Recommended)
+Copy your controller machine's SSH public key to the Pi once:
+```bash
+# If your Pi's host key changed from a previous install, reset cached host key:
+ssh-keygen -R 192.168.4.72
+
+# Copy your public SSH key (enter the Pi user's password once):
+ssh-copy-id sham@192.168.4.72
+```
+
+Then verify passwordless Ansible connectivity:
 ```bash
 ansible -i ansible/inventory.yml sashframe -m ping
 ```
+
+##### Option B: Password Authentication via Ansible
+Ansible requires `sshpass` installed on your controller machine to send passwords over SSH:
+```bash
+sudo apt install sshpass
+```
+Then pass `-k` (or `--ask-pass`) to prompt interactively for the SSH password:
+```bash
+ansible -i ansible/inventory.yml sashframe -m ping -k
+```
+*(Alternatively, specify `ansible_password` in `ansible/inventory.yml`).*
 
 #### 6. Syntax & Check Mode
 Verify playbook syntax and run a dry-run check:
@@ -209,16 +237,27 @@ Verify playbook syntax and run a dry-run check:
 # Check syntax
 ansible-playbook --syntax-check -i ansible/inventory.yml ansible/site.yml
 
-# Dry-run check mode
+# Dry-run check mode (add -k -K if using password auth):
 ansible-playbook --check -i ansible/inventory.yml ansible/site.yml
 ```
 
 #### 7. Provision Host, Configuration, and Services
 Execute the playbook:
+
+**Using SSH Key Authentication (Option A):**
 ```bash
+# If passwordless sudo is enabled on the Pi:
 ansible-playbook -i ansible/inventory.yml ansible/site.yml
+
+# If sudo requires a password, add -K (--ask-become-pass):
+ansible-playbook -i ansible/inventory.yml ansible/site.yml -K
 ```
-*Note*: If the target user requires a password for sudo, pass `--ask-become-pass` (or `-K`).
+
+**Using Password Authentication (Option B, requires `sshpass` on controller):**
+Prompt for both the SSH login password (`-k`) and sudo privilege escalation password (`-K`):
+```bash
+ansible-playbook -i ansible/inventory.yml ansible/site.yml -k -K
+```
 
 What this does:
 1. **Base Role**:
