@@ -1,5 +1,5 @@
 ---
-- name: Provision Sashframe Base Host and Configuration
+- name: Provision Sashframe Host, Configuration, and Services
   hosts: all
   become: true
   gather_facts: true
@@ -60,3 +60,4 @@
 
   roles:
     - role: base
+    - role: services

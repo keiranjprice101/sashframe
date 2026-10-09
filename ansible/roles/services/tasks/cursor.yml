@@ -1,0 +1,62 @@
+---
+# ==============================================================================
+# Transparent Cursor Theme for Cage & Chromium Kiosk Display
+# ==============================================================================
+
+- name: Ensure transparent cursor theme directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "/usr/share/icons/sashframe-transparent"
+    - "/usr/share/icons/sashframe-transparent/cursors"
+
+- name: Install transparent cursor default file
+  ansible.builtin.copy:
+    content: "{{ 'WGN1chAAAAABAAAAAQAAAAIA/f8gAAAAHAAAACQAAAACAP3/IAAAAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=' | b64decode }}"
+    dest: "/usr/share/icons/sashframe-transparent/cursors/default"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create symlinks for transparent cursor aliases
+  ansible.builtin.file:
+    src: "default"
+    dest: "/usr/share/icons/sashframe-transparent/cursors/{{ item }}"
+    state: link
+    owner: root
+    group: root
+  loop: "{{ sashframe_cursor_symlinks }}"
+
+- name: Install system transparent cursor theme index
+  ansible.builtin.copy:
+    content: |
+      [Icon Theme]
+      Name=sashframe-transparent
+      Comment=Transparent invisible cursor theme for Sashframe kiosk display
+    dest: "/usr/share/icons/sashframe-transparent/index.theme"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure user .icons directory exists
+  ansible.builtin.file:
+    path: "/home/{{ sashframe_user }}/.icons/default"
+    state: directory
+    owner: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    mode: "0755"
+
+- name: Install user transparent cursor theme index
+  ansible.builtin.copy:
+    content: |
+      [Icon Theme]
+      Name=default
+      Inherits=sashframe-transparent
+    dest: "/home/{{ sashframe_user }}/.icons/default/index.theme"
+    owner: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    mode: "0644"

@@ -1,0 +1,20 @@
+[Unit]
+Description=Sashframe Power-On Photo Ingestion (Google Drive Sync & Batch Processing)
+Documentation=https://github.com/keiranjprice101/sashframe
+Wants=network-online.target
+After=network-online.target
+Before=sashframe-kiosk.service
+
+[Service]
+Type=oneshot
+User={{ sashframe_user }}
+WorkingDirectory={{ sashframe_app_dir }}
+EnvironmentFile={{ sashframe_config_root }}/sashframe.env
+ExecStart=/bin/bash {{ sashframe_app_dir }}/scripts/sync-photos.sh
+RemainAfterExit=yes
+TimeoutStartSec=300
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

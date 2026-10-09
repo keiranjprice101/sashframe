@@ -1,0 +1,179 @@
+---
+# ==============================================================================
+# Sashframe Systemd Services & Timers Management
+# ==============================================================================
+
+# 1. Clean Up Legacy Systemd Units & Timers
+- name: Check if legacy systemd unit files exist
+  ansible.builtin.stat:
+    path: "{{ systemd_unit_dir }}/{{ item }}"
+  loop: "{{ sashframe_legacy_units }}"
+  register: legacy_unit_stats
+
+- name: Stop and disable legacy units if present
+  ansible.builtin.systemd_service:
+    name: "{{ item.item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ legacy_unit_stats.results }}"
+  when: item.stat.exists
+
+- name: Remove legacy systemd unit files
+  ansible.builtin.file:
+    path: "{{ systemd_unit_dir }}/{{ item.item }}"
+    state: absent
+  loop: "{{ legacy_unit_stats.results }}"
+  when: item.stat.exists
+  notify: reload systemd daemon
+
+- name: Ensure legacy timer symlinks are absent
+  ansible.builtin.file:
+    path: "{{ systemd_unit_dir }}/timers.target.wants/{{ item }}"
+    state: absent
+  loop:
+    - "sashframe-photo-sync.timer"
+    - "sashframe-updater.timer"
+
+# 2. Transparent Cursor Theme for Kiosk
+- name: Configure transparent cursor theme for kiosk display
+  ansible.builtin.include_tasks: cursor.yml
+
+# 3. Ensure Shell Scripts Are Executable
+- name: Ensure repository helper scripts are executable
+  ansible.builtin.file:
+    path: "{{ sashframe_app_dir }}/scripts/{{ item }}"
+    mode: "0755"
+  loop:
+    - start-app.sh
+    - start.sh
+    - sync-photos.sh
+    - process-photos.sh
+    - sync-shifter.sh
+    - update.sh
+
+# 4. Deploy Systemd Unit Templates
+- name: Deploy Sashframe systemd unit files
+  ansible.builtin.template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ sashframe_systemd_units }}"
+  notify: reload systemd daemon
+
+- name: Flush handlers to reload systemd daemon if units changed
+  ansible.builtin.meta: flush_handlers
+
+# 5. Manage Service and Timer States & Enablement
+- name: Ensure sashframe-app.service is enabled and started
+  ansible.builtin.systemd_service:
+    name: sashframe-app.service
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Ensure sashframe-app.service is enabled in check mode
+  ansible.builtin.systemd_service:
+    name: sashframe-app.service
+    enabled: true
+  when: ansible_check_mode
+
+- name: Ensure sashframe-kiosk.service is enabled and started
+  ansible.builtin.systemd_service:
+    name: sashframe-kiosk.service
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Ensure sashframe-kiosk.service is enabled in check mode
+  ansible.builtin.systemd_service:
+    name: sashframe-kiosk.service
+    enabled: true
+  when: ansible_check_mode
+
+- name: Ensure sashframe-photo-sync.service is enabled
+  ansible.builtin.systemd_service:
+    name: sashframe-photo-sync.service
+    enabled: true
+
+- name: Ensure sashframe-updater.service is enabled (power-on only)
+  ansible.builtin.systemd_service:
+    name: sashframe-updater.service
+    enabled: true
+
+- name: Ensure sashframe-shifter-sync.timer is enabled and started
+  ansible.builtin.systemd_service:
+    name: sashframe-shifter-sync.timer
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Ensure sashframe-shifter-sync.timer is enabled in check mode
+  ansible.builtin.systemd_service:
+    name: sashframe-shifter-sync.timer
+    enabled: true
+  when: ansible_check_mode
+
+# 6. Verification and Health Checking
+- name: Verify systemd units are installed
+  ansible.builtin.stat:
+    path: "{{ item.dest }}"
+  loop: "{{ sashframe_systemd_units }}"
+  register: installed_unit_stats
+
+- name: Assert systemd units integrity
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - item.stat.mode == '0644'
+      - item.stat.pw_name == 'root'
+      - item.stat.gr_name == 'root'
+    fail_msg: "Installed unit '{{ item.item.dest }}' does not have expected mode or ownership."
+  loop: "{{ installed_unit_stats.results }}"
+  when: not ansible_check_mode
+
+- name: Check status of shifter sync timer
+  ansible.builtin.command: systemctl is-active sashframe-shifter-sync.timer
+  register: timer_status_cmd
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Assert shifter sync timer is active
+  ansible.builtin.assert:
+    that:
+      - timer_status_cmd.stdout == 'active'
+    fail_msg: "sashframe-shifter-sync.timer is not active!"
+  when: not ansible_check_mode
+
+- name: Check status of kiosk service
+  ansible.builtin.command: systemctl is-active sashframe-kiosk.service
+  register: kiosk_status_cmd
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Assert kiosk service is active
+  ansible.builtin.assert:
+    that:
+      - kiosk_status_cmd.stdout == 'active'
+    fail_msg: "sashframe-kiosk.service is not active!"
+  when: not ansible_check_mode
+
+- name: Check application health endpoint
+  ansible.builtin.uri:
+    url: "{{ sashframe_health_url }}"
+    status_code: 200
+    return_content: true
+  register: health_resp
+  retries: 5
+  delay: 2
+  until: health_resp.status == 200
+  when: not ansible_check_mode
+
+- name: Assert application health response
+  ansible.builtin.assert:
+    that:
+      - health_resp.json.status == 'ok'
+    fail_msg: "Application health check failed: {{ health_resp.content | default('no response') }}"
+  when: not ansible_check_mode

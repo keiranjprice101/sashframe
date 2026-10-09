@@ -1,0 +1,18 @@
+[Unit]
+Description=Sashframe Power-On Software Auto-Updater
+Documentation=https://github.com/keiranjprice101/sashframe
+Wants=network-online.target
+After=network-online.target docker.service sashframe-app.service
+
+[Service]
+Type=oneshot
+User={{ sashframe_user }}
+WorkingDirectory={{ sashframe_app_dir }}
+EnvironmentFile={{ sashframe_config_root }}/sashframe.env
+ExecStart=/bin/bash {{ sashframe_app_dir }}/scripts/update.sh
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

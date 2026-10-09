@@ -9,6 +9,7 @@ sashframe_user_groups:
   - input
 
 # Canonical Filesystem Paths
+sashframe_app_dir: "/home/{{ sashframe_user }}/sashframe"
 sashframe_data_root: "/var/lib/sashframe"
 sashframe_config_root: "/etc/sashframe"
 

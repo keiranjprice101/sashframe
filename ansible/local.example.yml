@@ -26,3 +26,7 @@ sashframe_household:
   - id: "alex"
     name: "Alex"
     color: "#D96B52"
+
+# Optional: Application Repository Path Override (defaults to /home/{{ sashframe_user }}/sashframe)
+# sashframe_app_dir: "/home/sham/sashframe"
+

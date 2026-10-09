@@ -181,7 +181,7 @@ ansible-playbook --syntax-check -i ansible/inventory.yml ansible/site.yml
 ansible-playbook --check -i ansible/inventory.yml ansible/site.yml
 ```
 
-#### 6. Provision Host & Configuration
+#### 6. Provision Host, Configuration, and Services
 Execute the playbook:
 ```bash
 ansible-playbook -i ansible/inventory.yml ansible/site.yml
@@ -189,12 +189,25 @@ ansible-playbook -i ansible/inventory.yml ansible/site.yml
 *Note*: If the target user requires a password for sudo, pass `--ask-become-pass` (or `-K`).
 
 What this does:
-1. Validates controller-side service-account JSON structure and configuration variables.
-2. Backs up existing `/etc/sashframe/sashframe.env` to `/etc/sashframe/sashframe.env.pre-ansible` on first migration.
-3. Installs the Google service account credential to `/etc/sashframe/credentials/google-drive.json` with secure permissions (`0640` `root:sham`).
-4. Generates deterministic `/etc/sashframe/household.json` (`0640` `root:sham`).
-5. Generates canonical `/etc/sashframe/sashframe.env` (`0640` `root:sham`) preserving all runtime keys.
-6. Sets host timezone (`community.general.timezone`).
+1. **Base Role**:
+   - Validates controller-side service-account JSON structure and configuration variables.
+   - Provisions application user, groups (`docker`, `video`, `render`, `input`), packages, and directories (`/var/lib/sashframe`, `/etc/sashframe`).
+   - Backs up existing `/etc/sashframe/sashframe.env` to `/etc/sashframe/sashframe.env.pre-ansible` on first migration.
+   - Installs the Google service account credential to `/etc/sashframe/credentials/google-drive.json` with secure permissions (`0640` `root:sham`).
+   - Generates deterministic `/etc/sashframe/household.json` (`0640` `root:sham`).
+   - Generates canonical `/etc/sashframe/sashframe.env` (`0640` `root:sham`) preserving all runtime keys.
+   - Sets host timezone (`community.general.timezone`).
+2. **Services Role**:
+   - Cleans up legacy systemd units (`sashframe-boot-build.service`, `sashframe-photo-sync.timer`, `sashframe-updater.timer`).
+   - Configures the invisible cursor theme (`sashframe-transparent`) for Cage and Chromium kiosk display.
+   - Templatizes and deploys canonical systemd units:
+     - `sashframe-app.service` (oneshot known-good container launch and health gate)
+     - `sashframe-kiosk.service` (launches Cage + Chromium on `tty1` after app is healthy)
+     - `sashframe-photo-sync.service` (boot-only Google Drive photo ingestion and batch processing)
+     - `sashframe-updater.service` (boot-only power-on software auto-updater)
+     - `sashframe-shifter-sync.service` and `sashframe-shifter-sync.timer` (5-minute recurring calendar sync)
+   - Reloads systemd daemon and manages enablement/active states.
+   - Verifies systemd unit file integrity, timer state, kiosk state, and HTTP `/health` (200 OK).
 
 #### 7. Verify Idempotency
 Run the playbook a second time to ensure zero unintended changes:

@@ -1,0 +1,65 @@
+---
+# Sashframe Application User and Groups
+sashframe_user: "sham"
+sashframe_group: "sham"
+
+# Canonical Paths
+sashframe_app_dir: "/home/{{ sashframe_user }}/sashframe"
+sashframe_config_root: "/etc/sashframe"
+sashframe_data_root: "/var/lib/sashframe"
+systemd_unit_dir: "/etc/systemd/system"
+
+# Healthcheck settings
+sashframe_health_url: "http://127.0.0.1:4321/health"
+
+# Systemd Units to Manage
+sashframe_systemd_units:
+  - template: "sashframe-app.service.j2"
+    dest: "{{ systemd_unit_dir }}/sashframe-app.service"
+  - template: "sashframe-kiosk.service.j2"
+    dest: "{{ systemd_unit_dir }}/sashframe-kiosk.service"
+  - template: "sashframe-photo-sync.service.j2"
+    dest: "{{ systemd_unit_dir }}/sashframe-photo-sync.service"
+  - template: "sashframe-shifter-sync.service.j2"
+    dest: "{{ systemd_unit_dir }}/sashframe-shifter-sync.service"
+  - template: "sashframe-shifter-sync.timer.j2"
+    dest: "{{ systemd_unit_dir }}/sashframe-shifter-sync.timer"
+  - template: "sashframe-updater.service.j2"
+    dest: "{{ systemd_unit_dir }}/sashframe-updater.service"
+
+# Legacy systemd units to clean up / ensure absent
+sashframe_legacy_units:
+  - "sashframe-boot-build.service"
+  - "sashframe-photo-sync.timer"
+  - "sashframe-updater.timer"
+
+# Transparent Cursor Symlink Targets
+sashframe_cursor_symlinks:
+  - left_ptr
+  - right_ptr
+  - top_left_arrow
+  - arrow
+  - pointer
+  - hand
+  - hand1
+  - hand2
+  - grab
+  - grabbing
+  - wait
+  - watch
+  - progress
+  - xterm
+  - text
+  - ibeam
+  - crosshair
+  - cross
+  - move
+  - size_all
+  - help
+  - question_arrow
+  - dnd-none
+  - dnd-move
+  - dnd-copy
+  - dnd-link
+  - "0000816000000681000040808001010c"
+  - "08e631cbe3823404b201215b04232244"

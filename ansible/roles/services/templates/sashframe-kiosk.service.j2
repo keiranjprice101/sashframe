@@ -1,0 +1,31 @@
+[Unit]
+Description=Sashframe Kiosk Display
+Documentation=https://github.com/keiranjprice101/sashframe
+Wants=docker.service sashframe-app.service
+After=docker.service sashframe-app.service time-sync.target systemd-user-sessions.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+User={{ sashframe_user }}
+WorkingDirectory={{ sashframe_app_dir }}
+EnvironmentFile={{ sashframe_config_root }}/sashframe.env
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=XCURSOR_THEME=sashframe-transparent
+Environment=XCURSOR_SIZE=1
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+ExecStart=/bin/bash {{ sashframe_app_dir }}/scripts/start.sh --kiosk-only
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target graphical.target
