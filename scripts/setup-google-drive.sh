@@ -158,19 +158,15 @@ echo "✓ Test sync succeeded."
 
 # 9. Enable and start photo sync timer via sudo
 echo ""
-echo "Activating automated photo sync service and timer via systemctl..."
+echo "Activating power-on photo ingestion service via systemctl..."
 if command -v systemctl >/dev/null 2>&1; then
   sudo systemctl daemon-reload
-  if [ -f "/etc/systemd/system/sashframe-photo-sync.timer" ]; then
-    sudo systemctl enable --now sashframe-photo-sync.timer
-    echo ""
-    echo "============================================================="
-    echo " Systemd Timer Status:"
-    echo "============================================================="
-    systemctl status sashframe-photo-sync.timer --no-pager || true
+  if [ -f "/etc/systemd/system/sashframe-photo-sync.service" ]; then
+    sudo systemctl enable sashframe-photo-sync.service
+    echo "✓ Enabled sashframe-photo-sync.service for power-on boot photo ingestion."
   fi
 else
-  echo "[Notice] systemctl not found (non-systemd environment). Skipping timer activation."
+  echo "[Notice] systemctl not found (non-systemd environment). Skipping service activation."
 fi
 
 echo ""

@@ -17,9 +17,9 @@ Sashframe divides responsibilities cleanly between the Raspberry Pi host OS and 
 Raspberry Pi Host (Raspberry Pi OS Lite)
 ├── Systemd Host Services & Timers
 │   ├── sashframe-boot-build.service  # Rebuilds & launches Docker Compose images on power-on
+│   ├── sashframe-photo-sync.service  # Power-on Google Drive sync & batch photo ingestion
 │   ├── sashframe-kiosk.service       # Launches Chromium under Cage on tty1 on boot
 │   ├── sashframe-updater.timer       # Polls GitHub origin/main every 5 min, builds & deploys
-│   ├── sashframe-photo-sync.timer    # Runs rclone sync for photos from Google Drive every 5 min
 │   └── sashframe-shifter-sync.timer  # Syncs .Shifter calendar database from Google Drive every 5 min
 ├── Docker Compose Application Services
 │   ├── sashframe-app                 # Production Node/Astro SSR web server (127.0.0.1:4321)
@@ -40,7 +40,7 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 ### Host OS Responsibilities
 - **Docker Engine & Compose**: Runs containerized application services.
 - **rclone & Google Drive OAuth**: Securely keeps user credentials in `~/.config/rclone/` on the host. Docker containers never have access to Google credentials or `/var/run/docker.sock`.
-- **Systemd Timers**: Drives periodic background operations (`sashframe-photo-sync`, `sashframe-updater`).
+- **Systemd Timers & Boot Services**: Drives periodic background operations (`sashframe-updater`, `sashframe-shifter-sync`) and power-on boot ingestion (`sashframe-photo-sync`, `sashframe-boot-build`).
 - **Display & Hardware**: Chromium/Cage fullscreen kiosk running locally against `http://127.0.0.1:4321`.
 - **Persistent Household Data**: All photos, manifests, and deployment states reside in `/var/lib/sashframe/`.
 
@@ -141,14 +141,14 @@ The installer:
 4. Generates the central environment configuration at `/etc/sashframe/sashframe.env`.
 5. Builds Docker images tagged with the active Git commit SHA.
 6. Launches the application stack with Docker Compose.
-7. Registers and activates systemd units (`sashframe-kiosk.service` on `tty1`, `sashframe-updater.timer`, `sashframe-photo-sync.timer`).
+7. Registers and activates systemd units (`sashframe-kiosk.service` on `tty1`, `sashframe-updater.timer`, `sashframe-photo-sync.service`).
 
 #### Step 2: Configure Google Drive Photo Sync
 Run the non-root interactive helper to authorize Google Drive:
 ```bash
 ./scripts/setup-google-drive.sh
 ```
-Follow the prompts to configure the `gdrive` remote and target folder (default: `Calendar Photos`). The helper verifies the connection, performs an initial sync into `/var/lib/sashframe/photos/incoming/`, and activates the `sashframe-photo-sync.timer`.
+Follow the prompts to configure the `gdrive` remote and target folder (default: `Calendar Photos`). The helper verifies the connection, performs an initial sync into `/var/lib/sashframe/photos/incoming/`, and enables `sashframe-photo-sync.service` for power-on boot ingestion.
 
 ##### Authenticating Over Headless SSH
 Because Raspberry Pi OS is typically accessed over SSH without a local desktop web browser, use one of the following methods:
@@ -202,7 +202,7 @@ Sashframe provides a unified startup manager (`scripts/start.sh` / `npm start`) 
 
 ##### How Power-On Startup Works:
 1. **Docker Daemon** starts on boot (`systemctl enable docker`). The `sashframe-app` container runs with `restart: unless-stopped` serving the application. Photo processing is executed on demand or via batch commands (`npm run photos:process` or `docker compose run --rm sashframe-photo-processor`).
-2. **`sashframe-photo-sync.timer`** triggers 1 minute after boot (`OnBootSec=1m`), syncing incoming photos from Google Drive every 5 minutes.
+2. **`sashframe-photo-sync.service`** runs once on boot as a oneshot service (`Type=oneshot`, ordered before `sashframe-kiosk.service`), syncing incoming photos from Google Drive via rclone, running batch reconciliation into `/var/lib/sashframe/photos/processed/`, and verifying `manifest.json` is ready before the kiosk displays.
 3. **`sashframe-updater.timer`** triggers 2 minutes after boot (`OnBootSec=2m`), checking GitHub `origin/main` every 5 minutes for new releases.
 4. **`sashframe-kiosk.service`** runs on `tty1`, waits for `http://127.0.0.1:4321/health` to respond, and launches the **Cage** Wayland compositor with fullscreen Chromium kiosk mode directly onto the HDMI display.
 

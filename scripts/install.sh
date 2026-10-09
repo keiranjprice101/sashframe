@@ -317,7 +317,6 @@ if [ -d "$SYSTEMD_DIR" ]; then
   install_unit "$ROOT_DIR/systemd/sashframe-boot-build.service" "$SYSTEMD_DIR/sashframe-boot-build.service"
   install_unit "$ROOT_DIR/systemd/sashframe-kiosk.service" "$SYSTEMD_DIR/sashframe-kiosk.service"
   install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.service" "$SYSTEMD_DIR/sashframe-photo-sync.service"
-  install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.timer" "$SYSTEMD_DIR/sashframe-photo-sync.timer"
   install_unit "$ROOT_DIR/systemd/sashframe-shifter-sync.service" "$SYSTEMD_DIR/sashframe-shifter-sync.service"
   install_unit "$ROOT_DIR/systemd/sashframe-shifter-sync.timer" "$SYSTEMD_DIR/sashframe-shifter-sync.timer"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
@@ -403,8 +402,8 @@ fi
 
 if [ "$GDRIVE_READY" = true ]; then
   if command -v systemctl >/dev/null 2>&1; then
-    echo "Enabling and starting Google Drive photo sync timer..."
-    run_as_root systemctl enable --now sashframe-photo-sync.timer 2>/dev/null || true
+    echo "Enabling Google Drive photo ingestion service for power-on boot..."
+    run_as_root systemctl enable sashframe-photo-sync.service 2>/dev/null || true
   fi
 fi
 

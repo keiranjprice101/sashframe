@@ -1,66 +1,92 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# Sashframe - Power-On & On-Demand Photo Ingestion
+#
+# Pipeline:
+#   rclone sync (from Google Drive into canonical host incoming/)
+#     ↓
+#   deterministic batch photo processor (validate, EXIF rotate, resize, WebP, manifest)
+#     ↓
+#   manifest.json ready for application display
+# ==============================================================================
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-/etc/sashframe/sashframe.env}"
 
-# 1. Source environment file if present, or fail clearly
+# 1. Source canonical environment file if present
 if [ -f "$ENV_FILE" ]; then
   # shellcheck source=/dev/null
   set -a
   source "$ENV_FILE"
   set +a
-else
-  echo "[Error] Configuration file '$ENV_FILE' not found." >&2
-  echo "Please run sudo ./scripts/install.sh to create the environment file." >&2
-  exit 1
+elif [ -f "$ROOT_DIR/.env" ]; then
+  set -a
+  source "$ROOT_DIR/.env"
+  set +a
 fi
 
-# 2. Derive canonical host photo incoming directory
+# 2. Derive canonical host photo directories
 SASHFRAME_PHOTOS_DIR="${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}"
+if [ ! -d "$SASHFRAME_PHOTOS_DIR" ] && [ -d "$ROOT_DIR/data/photos" ]; then
+  SASHFRAME_PHOTOS_DIR="$ROOT_DIR/data/photos"
+fi
+
 PHOTO_INCOMING_DIR="${SASHFRAME_PHOTOS_DIR}/incoming"
+PHOTO_PROCESSED_DIR="${SASHFRAME_PHOTOS_DIR}/processed"
+PHOTO_MANIFEST="${SASHFRAME_PHOTOS_DIR}/manifest.json"
 
-# 3. Validate required variables
-MISSING_VARS=()
-if [ -z "${RCLONE_REMOTE:-}" ]; then
-  MISSING_VARS+=("RCLONE_REMOTE")
-fi
+mkdir -p "$PHOTO_INCOMING_DIR" "$PHOTO_PROCESSED_DIR" "$(dirname "$PHOTO_MANIFEST")"
 
-if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-  echo "[Error] Missing required environment variables in $ENV_FILE:" >&2
-  for var in "${MISSING_VARS[@]}"; do
-    echo "  - $var" >&2
-  done
-  exit 1
-fi
+# 3. Step 1: Google Drive sync via rclone (if configured)
+RCLONE_CONFIG_FILE="${RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+RCLONE_REMOTE_NAME="${RCLONE_REMOTE:-gdrive}"
 
-# 4. Verify rclone binary
-if ! command -v rclone >/dev/null 2>&1; then
-  echo "[Error] rclone binary is not installed or not in PATH." >&2
-  exit 1
-fi
-
-# 5. Prepare rclone arguments
-RCLONE_ARGS=()
-if [ -n "${RCLONE_CONFIG:-}" ]; then
-  if [ ! -f "$RCLONE_CONFIG" ]; then
-    echo "[Error] Configured RCLONE_CONFIG file does not exist: $RCLONE_CONFIG" >&2
-    echo "Please run ./scripts/setup-google-drive.sh to configure Google Drive access." >&2
-    exit 1
+if [ -n "${RCLONE_REMOTE:-}" ] && command -v rclone >/dev/null 2>&1; then
+  RCLONE_ARGS=()
+  if [ -f "$RCLONE_CONFIG_FILE" ]; then
+    RCLONE_ARGS+=("--config" "$RCLONE_CONFIG_FILE")
   fi
-  RCLONE_ARGS+=("--config" "$RCLONE_CONFIG")
-fi
 
-# 6. Ensure local incoming directory exists
-mkdir -p "$PHOTO_INCOMING_DIR"
+  if [ -n "${RCLONE_PHOTO_PATH:-}" ]; then
+    REMOTE_TARGET="${RCLONE_REMOTE_NAME}:${RCLONE_PHOTO_PATH}"
+  else
+    REMOTE_TARGET="${RCLONE_REMOTE_NAME}:"
+  fi
 
-if [ -n "${RCLONE_PHOTO_PATH:-}" ]; then
-  REMOTE_TARGET="${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}"
+  echo "[Sync] Step 1/2: Syncing incoming photos from '${REMOTE_TARGET}'..."
+  # Resilient sync: handle network unavailability gracefully so local batch processing continues
+  if rclone sync "${RCLONE_ARGS[@]}" "${REMOTE_TARGET}" "${PHOTO_INCOMING_DIR}"; then
+    echo "[Sync] Step 1/2: Google Drive download completed successfully."
+  else
+    echo "[Sync] Warning: rclone sync encountered an error or network was unavailable. Proceeding with existing local photos." >&2
+  fi
 else
-  REMOTE_TARGET="${RCLONE_REMOTE}:"
+  echo "[Sync] Step 1/2: Remote sync skipped (RCLONE_REMOTE not set or rclone not installed). Using local incoming photos."
 fi
-echo "[Sync] Starting photo sync from '${REMOTE_TARGET}' into '${PHOTO_INCOMING_DIR}'..."
 
-# 7. Execute rclone sync
-rclone sync "${RCLONE_ARGS[@]}" "${REMOTE_TARGET}" "${PHOTO_INCOMING_DIR}"
+# 4. Step 2: Deterministic batch photo processing
+echo "[Sync] Step 2/2: Executing batch photo reconciliation..."
+if [ -f "$ROOT_DIR/.venv/bin/python3" ]; then
+  "$ROOT_DIR/.venv/bin/python3" -m services.photos.process \
+    --incoming "$PHOTO_INCOMING_DIR" \
+    --processed "$PHOTO_PROCESSED_DIR" \
+    --manifest "$PHOTO_MANIFEST"
+elif command -v python3 >/dev/null 2>&1; then
+  python3 -m services.photos.process \
+    --incoming "$PHOTO_INCOMING_DIR" \
+    --processed "$PHOTO_PROCESSED_DIR" \
+    --manifest "$PHOTO_MANIFEST"
+elif command -v docker >/dev/null 2>&1; then
+  (cd "$ROOT_DIR" && docker compose --env-file /etc/sashframe/sashframe.env run --rm sashframe-photo-processor)
+else
+  echo "[Sync] Error: Neither Python 3 nor Docker found to execute photo processing." >&2
+  exit 1
+fi
 
-echo "[Sync] Photo sync completed successfully at $(date -u '+%Y-%m-%d %H:%M:%SZ')."
+# 5. Confirm manifest ready
+if [ -f "$PHOTO_MANIFEST" ]; then
+  echo "[Sync] ✓ Photo ingestion pipeline complete. Manifest is ready at '${PHOTO_MANIFEST}'."
+else
+  echo "[Sync] Warning: Manifest file was not created at '${PHOTO_MANIFEST}'." >&2
+fi

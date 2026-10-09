@@ -95,7 +95,6 @@ ensure_systemd_units_installed() {
   install_unit_if_missing "sashframe-boot-build.service"
   install_unit_if_missing "sashframe-kiosk.service"
   install_unit_if_missing "sashframe-photo-sync.service"
-  install_unit_if_missing "sashframe-photo-sync.timer"
   install_unit_if_missing "sashframe-shifter-sync.service"
   install_unit_if_missing "sashframe-shifter-sync.timer"
   install_unit_if_missing "sashframe-updater.service"
@@ -123,11 +122,11 @@ setup_boot_autostart() {
   echo "Enabling power-on Docker build service..."
   run_as_root systemctl enable sashframe-boot-build.service 2>/dev/null || true
 
+  echo "Enabling power-on photo ingestion service..."
+  run_as_root systemctl enable sashframe-photo-sync.service 2>/dev/null || true
+
   echo "Enabling auto-updater timer..."
   run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
-
-  echo "Enabling photo sync timer..."
-  run_as_root systemctl enable --now sashframe-photo-sync.timer 2>/dev/null || true
 
   echo "Enabling shifter calendar sync timer..."
   run_as_root systemctl enable --now sashframe-shifter-sync.timer 2>/dev/null || true
@@ -139,7 +138,7 @@ setup_boot_autostart() {
   echo "✓ Sashframe is now configured to start automatically on power-on:"
   echo "  - Docker daemon (application containers)"
   echo "  - Power-on Docker build (sashframe-boot-build.service)"
-  echo "  - Photo sync timer (sashframe-photo-sync.timer)"
+  echo "  - Power-on photo ingestion (sashframe-photo-sync.service)"
   echo "  - Shifter calendar sync timer (sashframe-shifter-sync.timer)"
   echo "  - Auto-updater timer (sashframe-updater.timer)"
   echo "  - Kiosk display on tty1 (sashframe-kiosk.service)"
@@ -199,17 +198,6 @@ start_background_timers() {
     fi
     if ! systemctl is-enabled --quiet sashframe-updater.timer 2>/dev/null; then
       run_as_root systemctl enable sashframe-updater.timer 2>/dev/null || true
-    fi
-  fi
-
-  # 2. Photo sync timer
-  if systemctl list-unit-files sashframe-photo-sync.timer >/dev/null 2>&1; then
-    if ! systemctl is-active --quiet sashframe-photo-sync.timer 2>/dev/null; then
-      echo "[Systemd] Starting photo sync timer..."
-      run_as_root systemctl start sashframe-photo-sync.timer 2>/dev/null || true
-    fi
-    if ! systemctl is-enabled --quiet sashframe-photo-sync.timer 2>/dev/null; then
-      run_as_root systemctl enable sashframe-photo-sync.timer 2>/dev/null || true
     fi
   fi
 }
@@ -438,7 +426,7 @@ print_status() {
   # 3. Systemd units status
   if command -v systemctl >/dev/null 2>&1; then
     echo "--- Systemd Services & Timers ---"
-    for unit in sashframe-kiosk.service sashframe-photo-sync.timer sashframe-updater.timer docker.service; do
+    for unit in sashframe-kiosk.service sashframe-photo-sync.service sashframe-updater.timer docker.service; do
       if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
         local active_status enabled_status
         active_status="$(systemctl is-active "$unit" 2>/dev/null || echo "inactive")"
