@@ -24,12 +24,9 @@ cd "$ROOT_DIR"
 if [ -f "/etc/sashframe/sashframe.env" ]; then
   # shellcheck source=/dev/null
   source "/etc/sashframe/sashframe.env"
-elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-  # shellcheck source=/dev/null
-  source "/etc/home-calendar/home-calendar.env"
 fi
 
-STATE_DIR="/var/lib/sashframe/state"
+STATE_DIR="${SASHFRAME_STATE_DIR:-/var/lib/sashframe/state}"
 if [ ! -d "$STATE_DIR" ] && [ -w "$ROOT_DIR/data" ]; then
   STATE_DIR="$ROOT_DIR/data/state"
 fi
@@ -106,9 +103,15 @@ if ! git checkout -f "$TARGET_SHA" --quiet; then
   exit 1
 fi
 
+# Setup Compose environment file argument
+COMPOSE_ENV_ARGS=()
+if [ -f "/etc/sashframe/sashframe.env" ]; then
+  COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
+fi
+
 # 4. Build new Docker images tagged with TARGET_TAG
 log "Building Docker images for tag: ${TARGET_TAG}..."
-if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" build; then
+if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build; then
   log "Error: Docker image build failed for ${TARGET_TAG}. Leaving current deployment running."
   git checkout -f "$PREV_HEAD" --quiet || true
   exit 1
@@ -116,10 +119,10 @@ fi
 
 # 5. Deploy the newly built version
 log "Deploying version ${TARGET_TAG} with Docker Compose..."
-if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" up -d; then
+if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d; then
   log "Error: Failed to launch containers for ${TARGET_TAG}. Rolling back..."
   if [ -n "$CURRENT_TAG" ]; then
-    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" up -d || true
+    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d || true
   fi
   git checkout -f "$PREV_HEAD" --quiet || true
   exit 1
@@ -152,7 +155,7 @@ else
   if [ -n "$CURRENT_TAG" ]; then
     log "Restoring previous working deployment (${CURRENT_TAG})..."
     git checkout -f "$PREV_HEAD" --quiet || true
-    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" up -d || true
+    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d || true
     if check_health; then
       log "Rollback to ${CURRENT_TAG} succeeded."
     else

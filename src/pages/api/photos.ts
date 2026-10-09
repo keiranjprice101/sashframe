@@ -3,18 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function getManifestPath(): string {
-  if (process.env.PHOTO_MANIFEST) {
-    return process.env.PHOTO_MANIFEST;
-  }
-  const sashframePath = '/var/lib/sashframe/photos/manifest.json';
-  if (fs.existsSync(sashframePath)) {
-    return sashframePath;
-  }
-  const legacyPath = '/var/lib/home-calendar/photos/manifest.json';
-  if (fs.existsSync(legacyPath)) {
-    return legacyPath;
-  }
-  return path.resolve('data/photos/manifest.json');
+  return process.env.PHOTO_MANIFEST || path.resolve('data/photos/manifest.json');
 }
 
 export const GET: APIRoute = async () => {

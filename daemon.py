@@ -51,7 +51,6 @@ def load_env_file(path: Path) -> None:
 
 
 load_env_file(Path("/etc/sashframe/sashframe.env"))
-load_env_file(Path("/etc/home-calendar/home-calendar.env"))
 
 # Base Paths
 REPO_ROOT = Path(__file__).resolve().parent

@@ -54,10 +54,8 @@ export function getShifterFiles(): string[] {
   }
 
   const searchDirs = [
-    process.env.SHIFTER_INPUT_DIR,
-    '/var/lib/sashframe/calendar',
-    path.resolve('data/shifter')
-  ].filter((d): d is string => !!d);
+    process.env.SHIFTER_INPUT_DIR || path.resolve('data/shifter')
+  ];
 
   for (const dir of searchDirs) {
     if (!fs.existsSync(dir)) continue;
@@ -91,9 +89,8 @@ export function getShifterFiles(): string[] {
 /**
  * Discovers the primary Shifter file path with fallback priority:
  * 1. SHIFTER_FILE_PATH environment variable (if explicitly configured)
- * 2. Production persistent storage (/var/lib/sashframe/calendar/calendar.Shifter)
- * 3. Local repository development directory (data/shifter/calendar.Shifter or Unnamed.Shifter)
- * 4. Most recently modified .Shifter file
+ * 2. Canonical 'calendar.Shifter' if present in discovered files
+ * 3. Most recently modified .Shifter file
  */
 export function getShifterFilePath(): string | null {
   if (process.env.SHIFTER_FILE_PATH) {

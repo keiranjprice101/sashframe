@@ -203,14 +203,6 @@ for dir in "${RUNTIME_DIRS[@]}"; do
   fi
 done
 
-# Migration: copy existing photos from legacy path /var/lib/home-calendar if present
-if [ -d "/var/lib/home-calendar/photos" ] && [ ! -f "/var/lib/sashframe/photos/manifest.json" ]; then
-  if [ -f "/var/lib/home-calendar/photos/manifest.json" ]; then
-    echo "  Migrating legacy photos from /var/lib/home-calendar to /var/lib/sashframe..."
-    run_as_root cp -rn /var/lib/home-calendar/photos/* /var/lib/sashframe/photos/ 2>/dev/null || true
-  fi
-fi
-
 run_as_root chown -R "$INSTALL_USER:$INSTALL_USER" "/var/lib/sashframe"
 run_as_root chmod 755 "/var/lib/sashframe" "/var/lib/sashframe/photos" "/var/lib/sashframe/photos/incoming" "/var/lib/sashframe/photos/processed" "/var/lib/sashframe/calendar" "/var/lib/sashframe/calendar/incoming" "/var/lib/sashframe/state" "/var/lib/sashframe/database"
 
@@ -220,52 +212,51 @@ run_as_root mkdir -p "/etc/sashframe"
 run_as_root chmod 755 "/etc/sashframe"
 
 ENV_FILE="/etc/sashframe/sashframe.env"
-LEGACY_ENV="/etc/home-calendar/home-calendar.env"
 
 if [ ! -f "$ENV_FILE" ]; then
-  if [ -f "$LEGACY_ENV" ]; then
-    echo "  Migrating existing configuration from $LEGACY_ENV to $ENV_FILE..."
-    run_as_root sed -e 's|/var/lib/home-calendar|/var/lib/sashframe|g' "$LEGACY_ENV" > "/tmp/sashframe.env"
-    run_as_root mv "/tmp/sashframe.env" "$ENV_FILE"
-  else
-    echo "  Creating $ENV_FILE with default production settings..."
-    run_as_root bash -c "cat << EOF > '$ENV_FILE'
+  echo "  Creating $ENV_FILE with default production settings..."
+  run_as_root bash -c "cat << EOF > '$ENV_FILE'
 # Sashframe Environment Configuration
 PUID=${INSTALL_UID}
 PGID=${INSTALL_GID}
 
-PHOTO_INPUT_DIR=/var/lib/sashframe/photos/incoming
-PHOTO_OUTPUT_DIR=/var/lib/sashframe/photos/processed
-PHOTO_MANIFEST=/var/lib/sashframe/photos/manifest.json
+# Host Canonical Data Directories
+SASHFRAME_DATA_DIR=/var/lib/sashframe
+SASHFRAME_PHOTOS_DIR=/var/lib/sashframe/photos
+SASHFRAME_CALENDAR_DIR=/var/lib/sashframe/calendar
+SASHFRAME_STATE_DIR=/var/lib/sashframe/state
+SASHFRAME_DATABASE_DIR=/var/lib/sashframe/database
+
+# Photo Processing Settings
 PHOTO_MAX_SIZE=1920
 PHOTO_QUALITY=85
 
+# Google Drive Photo Sync Settings
 RCLONE_REMOTE=gdrive
 RCLONE_PHOTO_PATH=\"Calendar Photos\"
 
+# Google Drive Shifter Calendar Sync Settings
 RCLONE_SHIFTER_REMOTE=gdrive
 RCLONE_SHIFTER_FOLDER_ID=\"\"
 RCLONE_SHIFTER_PATH=\"\"
-SHIFTER_INPUT_DIR=/var/lib/sashframe/calendar
-SHIFTER_FILE_PATH=/var/lib/sashframe/calendar/calendar.Shifter
 
+# rclone Configuration File
 RCLONE_CONFIG=${INSTALL_HOME}/.config/rclone/rclone.conf
 EOF"
-  fi
   run_as_root chown "$INSTALL_USER:$INSTALL_USER" "$ENV_FILE"
   run_as_root chmod 644 "$ENV_FILE"
 else
   echo "  Existing $ENV_FILE found. Preserving user configuration."
-  # Ensure Shifter variables exist if upgrading from older version
-  if ! grep -q "^SHIFTER_INPUT_DIR=" "$ENV_FILE" 2>/dev/null; then
+  # Ensure canonical directory variables exist if upgrading from older version
+  if ! grep -q "^SASHFRAME_CALENDAR_DIR=" "$ENV_FILE" 2>/dev/null; then
     run_as_root bash -c "cat << 'EOF' >> '$ENV_FILE'
 
-# Shifter Calendar Sync Settings
-RCLONE_SHIFTER_REMOTE=gdrive
-RCLONE_SHIFTER_FOLDER_ID=\"\"
-RCLONE_SHIFTER_PATH=\"\"
-SHIFTER_INPUT_DIR=/var/lib/sashframe/calendar
-SHIFTER_FILE_PATH=/var/lib/sashframe/calendar/calendar.Shifter
+# Canonical Host Directories
+SASHFRAME_DATA_DIR=/var/lib/sashframe
+SASHFRAME_PHOTOS_DIR=/var/lib/sashframe/photos
+SASHFRAME_CALENDAR_DIR=/var/lib/sashframe/calendar
+SASHFRAME_STATE_DIR=/var/lib/sashframe/state
+SASHFRAME_DATABASE_DIR=/var/lib/sashframe/database
 EOF"
   fi
 fi
@@ -332,10 +323,6 @@ if [ -d "$SYSTEMD_DIR" ]; then
   install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.timer" "$SYSTEMD_DIR/sashframe-updater.timer"
 
-  # Maintain legacy units for compatibility
-  install_unit "$ROOT_DIR/systemd/home-calendar-photo-sync.service" "$SYSTEMD_DIR/home-calendar-photo-sync.service"
-  install_unit "$ROOT_DIR/systemd/home-calendar-photo-sync.timer" "$SYSTEMD_DIR/home-calendar-photo-sync.timer"
-
   if command -v systemctl >/dev/null 2>&1; then
     run_as_root systemctl daemon-reload
     # Enable power-on Docker build service (builds and launches fresh containers on boot)
@@ -363,12 +350,17 @@ elif [ -x "$ROOT_DIR/.venv/bin/podman-compose" ]; then
 fi
 
 if [ ${#COMPOSE_CMD[@]} -gt 0 ]; then
+  COMPOSE_ENV_ARGS=()
+  if [ -f "$ENV_FILE" ]; then
+    COMPOSE_ENV_ARGS=(--env-file "$ENV_FILE")
+  fi
+
   GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
   echo "  Building Docker images tagged '${GIT_SHA}'..."
-  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" build
+  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build
 
   echo "  Starting Sashframe production containers..."
-  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" up -d
+  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d
 
   # Record initially deployed SHA
   run_as_root mkdir -p /var/lib/sashframe/state

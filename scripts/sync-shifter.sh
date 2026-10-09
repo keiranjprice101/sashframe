@@ -5,8 +5,6 @@ set -euo pipefail
 if [ -z "${ENV_FILE:-}" ]; then
   if [ -f "/etc/sashframe/sashframe.env" ]; then
     ENV_FILE="/etc/sashframe/sashframe.env"
-  elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-    ENV_FILE="/etc/home-calendar/home-calendar.env"
   elif [ -f "$(dirname "${BASH_SOURCE[0]}")/../.env" ]; then
     ENV_FILE="$(dirname "${BASH_SOURCE[0]}")/../.env"
   else
@@ -26,13 +24,13 @@ else
 fi
 
 # 2. Determine directories and targets
-SHIFTER_INPUT_DIR="${SHIFTER_INPUT_DIR:-/var/lib/sashframe/calendar}"
-if [ ! -d "$SHIFTER_INPUT_DIR" ] && [ -d "$(dirname "${BASH_SOURCE[0]}")/../data/shifter" ]; then
-  SHIFTER_INPUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../data/shifter" && pwd)"
+CALENDAR_DIR="${SASHFRAME_CALENDAR_DIR:-/var/lib/sashframe/calendar}"
+if [ ! -d "$CALENDAR_DIR" ] && [ -d "$(dirname "${BASH_SOURCE[0]}")/../data/shifter" ]; then
+  CALENDAR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../data/shifter" && pwd)"
 fi
 
-STAGING_DIR="${SHIFTER_INPUT_DIR}/incoming"
-TARGET_FILE="${SHIFTER_FILE_PATH:-${SHIFTER_INPUT_DIR}/calendar.Shifter}"
+STAGING_DIR="${CALENDAR_DIR}/incoming"
+TARGET_FILE="${CALENDAR_DIR}/calendar.Shifter"
 
 RCLONE_REMOTE_NAME="${RCLONE_SHIFTER_REMOTE:-${RCLONE_REMOTE:-gdrive}}"
 RCLONE_CONFIG_FILE="${RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
@@ -89,7 +87,7 @@ else
 fi
 
 mkdir -p "$STAGING_DIR"
-mkdir -p "$SHIFTER_INPUT_DIR"
+mkdir -p "$CALENDAR_DIR"
 
 echo "[Sync] Checking for Shifter calendar files from '${REMOTE_TARGET}'..."
 
@@ -112,9 +110,9 @@ for file in "$STAGING_DIR"/*; do
       BASENAME="$(basename "$file")"
 
       # Atomically copy with original filename into calendar directory
-      cp -f "$file" "${SHIFTER_INPUT_DIR}/${BASENAME}.tmp"
-      mv -f "${SHIFTER_INPUT_DIR}/${BASENAME}.tmp" "${SHIFTER_INPUT_DIR}/${BASENAME}"
-      chmod 644 "${SHIFTER_INPUT_DIR}/${BASENAME}" 2>/dev/null || true
+      cp -f "$file" "${CALENDAR_DIR}/${BASENAME}.tmp"
+      mv -f "${CALENDAR_DIR}/${BASENAME}.tmp" "${CALENDAR_DIR}/${BASENAME}"
+      chmod 644 "${CALENDAR_DIR}/${BASENAME}" 2>/dev/null || true
 
       # Track the most recent file
       FILE_TIME="$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null || echo 0)"
@@ -131,7 +129,7 @@ if [ -n "$NEWEST_FILE" ] && [ -f "$NEWEST_FILE" ]; then
   cp -f "$NEWEST_FILE" "${TARGET_FILE}.tmp"
   mv -f "${TARGET_FILE}.tmp" "${TARGET_FILE}"
   chmod 644 "${TARGET_FILE}" 2>/dev/null || true
-  chmod 755 "${SHIFTER_INPUT_DIR}" 2>/dev/null || true
+  chmod 755 "${CALENDAR_DIR}" 2>/dev/null || true
   echo "[Sync] Successfully published ${FOUND_COUNT} Shifter file(s). Active target set to '${TARGET_FILE}' (from '$(basename "$NEWEST_FILE")')."
 else
   echo "[Sync] No .Shifter files found in remote target '${REMOTE_TARGET}'."

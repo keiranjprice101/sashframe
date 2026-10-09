@@ -24,15 +24,7 @@ if ! command -v rclone >/dev/null 2>&1; then
 fi
 
 # 3. Source environment configuration if present
-if [ -z "${ENV_FILE:-}" ]; then
-  if [ -f "/etc/sashframe/sashframe.env" ]; then
-    ENV_FILE="/etc/sashframe/sashframe.env"
-  elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-    ENV_FILE="/etc/home-calendar/home-calendar.env"
-  else
-    ENV_FILE="/etc/sashframe/sashframe.env"
-  fi
-fi
+ENV_FILE="${ENV_FILE:-/etc/sashframe/sashframe.env}"
 
 if [ -f "$ENV_FILE" ]; then
   if [ -r "$ENV_FILE" ]; then
@@ -47,8 +39,8 @@ RCLONE_CONFIG="${RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
 RCLONE_SHIFTER_REMOTE="${RCLONE_SHIFTER_REMOTE:-$RCLONE_REMOTE}"
 RCLONE_SHIFTER_FOLDER_ID="${RCLONE_SHIFTER_FOLDER_ID:-}"
-SHIFTER_INPUT_DIR="${SHIFTER_INPUT_DIR:-/var/lib/sashframe/calendar}"
-SHIFTER_FILE_PATH="${SHIFTER_FILE_PATH:-$SHIFTER_INPUT_DIR/calendar.Shifter}"
+SASHFRAME_CALENDAR_DIR="${SASHFRAME_CALENDAR_DIR:-/var/lib/sashframe/calendar}"
+SHIFTER_FILE_PATH="${SHIFTER_FILE_PATH:-$SASHFRAME_CALENDAR_DIR/calendar.Shifter}"
 
 echo "============================================================="
 echo " Sashframe - Google Drive Shifter Calendar Sync Setup"
@@ -61,7 +53,7 @@ echo "  Rclone Config File:  ${RCLONE_CONFIG}"
 echo "  Base Remote Name:    ${RCLONE_REMOTE}"
 echo "  Shifter Remote Name: ${RCLONE_SHIFTER_REMOTE}"
 echo "  Shifter Folder ID:   ${RCLONE_SHIFTER_FOLDER_ID:-<not set>}"
-echo "  Local Calendar Dir:  ${SHIFTER_INPUT_DIR}"
+echo "  Local Calendar Dir:  ${SASHFRAME_CALENDAR_DIR}"
 echo "  Active Shifter File: ${SHIFTER_FILE_PATH}"
 echo "============================================================="
 echo ""
@@ -193,8 +185,7 @@ if [ -f "$ENV_FILE" ]; then
 
   update_or_add_var "RCLONE_SHIFTER_REMOTE" "$REMOTE_TO_USE" "$ENV_FILE"
   update_or_add_var "RCLONE_SHIFTER_FOLDER_ID" "$FOLDER_ID" "$ENV_FILE"
-  update_or_add_var "SHIFTER_INPUT_DIR" "$SHIFTER_INPUT_DIR" "$ENV_FILE"
-  update_or_add_var "SHIFTER_FILE_PATH" "$SHIFTER_FILE_PATH" "$ENV_FILE"
+  update_or_add_var "SASHFRAME_CALENDAR_DIR" "$SASHFRAME_CALENDAR_DIR" "$ENV_FILE"
   echo "Configuration saved to $ENV_FILE."
 fi
 
@@ -204,7 +195,7 @@ read -r -p "Run sync test now? [Y/n]: " RUN_TEST
 if [[ ! "$RUN_TEST" =~ ^[Nn]$ ]]; then
   RCLONE_SHIFTER_REMOTE="$REMOTE_TO_USE" \
   RCLONE_SHIFTER_FOLDER_ID="$FOLDER_ID" \
-  SHIFTER_INPUT_DIR="$SHIFTER_INPUT_DIR" \
+  SASHFRAME_CALENDAR_DIR="$SASHFRAME_CALENDAR_DIR" \
   RCLONE_CONFIG="$RCLONE_CONFIG" \
   "$(dirname "${BASH_SOURCE[0]}")/sync-shifter.sh" || true
 fi

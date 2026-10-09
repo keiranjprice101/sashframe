@@ -3,18 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function getProcessedDir(): string {
-  if (process.env.PHOTO_OUTPUT_DIR) {
-    return process.env.PHOTO_OUTPUT_DIR;
-  }
-  const sashframeDir = '/var/lib/sashframe/photos/processed';
-  if (fs.existsSync(sashframeDir)) {
-    return sashframeDir;
-  }
-  const legacyDir = '/var/lib/home-calendar/photos/processed';
-  if (fs.existsSync(legacyDir)) {
-    return legacyDir;
-  }
-  return path.resolve('data/photos/processed');
+  return process.env.PHOTO_OUTPUT_DIR || path.resolve('data/photos/processed');
 }
 
 export const GET: APIRoute = async ({ params }) => {

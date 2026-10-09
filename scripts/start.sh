@@ -17,9 +17,6 @@ cd "$ROOT_DIR"
 if [ -f "/etc/sashframe/sashframe.env" ]; then
   # shellcheck source=/dev/null
   source "/etc/sashframe/sashframe.env"
-elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-  # shellcheck source=/dev/null
-  source "/etc/home-calendar/home-calendar.env"
 fi
 
 PORT="${PORT:-4321}"
@@ -170,17 +167,22 @@ start_docker_stack() {
     fi
   fi
 
+  local compose_env_args=()
+  if [ -f "/etc/sashframe/sashframe.env" ]; then
+    compose_env_args=(--env-file "/etc/sashframe/sashframe.env")
+  fi
+
   GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
 
   # Build Docker images on startup if not already built during this boot session
   if [ ! -f "/run/sashframe-boot-built" ]; then
     echo "[Docker] Building Sashframe application images for tag '${GIT_SHA}'..."
-    IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" build
+    IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" build
     touch "/run/sashframe-boot-built" 2>/dev/null || true
   fi
 
   echo "[Docker] Ensuring Sashframe application containers are running (${GIT_SHA})..."
-  IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" up -d --remove-orphans
+  IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" up -d --remove-orphans
 }
 
 # Ensure background timers are active
@@ -412,8 +414,12 @@ print_status() {
   compose_str="$(get_compose_cmd)"
   if [ -n "$compose_str" ]; then
     read -r -a COMPOSE_CMD <<< "$compose_str"
+    local compose_env_args=()
+    if [ -f "/etc/sashframe/sashframe.env" ]; then
+      compose_env_args=(--env-file "/etc/sashframe/sashframe.env")
+    fi
     echo "--- Docker Containers ---"
-    "${COMPOSE_CMD[@]}" ps || true
+    "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" ps || true
   else
     echo "--- Docker Containers ---"
     echo "Docker Compose not available."
@@ -457,7 +463,11 @@ stop_all() {
   compose_str="$(get_compose_cmd)"
   if [ -n "$compose_str" ]; then
     read -r -a COMPOSE_CMD <<< "$compose_str"
-    "${COMPOSE_CMD[@]}" down
+    local compose_env_args=()
+    if [ -f "/etc/sashframe/sashframe.env" ]; then
+      compose_env_args=(--env-file "/etc/sashframe/sashframe.env")
+    fi
+    "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" down
   fi
   echo "[Shutdown] Sashframe stopped."
 }

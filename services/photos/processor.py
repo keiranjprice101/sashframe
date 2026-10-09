@@ -54,7 +54,6 @@ def load_env_file(path: Path) -> None:
 
 
 load_env_file(Path("/etc/sashframe/sashframe.env"))
-load_env_file(Path("/etc/home-calendar/home-calendar.env"))
 
 
 class PhotoDebounceHandler(FileSystemEventHandler):

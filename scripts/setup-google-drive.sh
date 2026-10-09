@@ -24,15 +24,7 @@ if ! command -v rclone >/dev/null 2>&1; then
 fi
 
 # 3. Source environment configuration if present
-if [ -z "${ENV_FILE:-}" ]; then
-  if [ -f "/etc/sashframe/sashframe.env" ]; then
-    ENV_FILE="/etc/sashframe/sashframe.env"
-  elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-    ENV_FILE="/etc/home-calendar/home-calendar.env"
-  else
-    ENV_FILE="/etc/sashframe/sashframe.env"
-  fi
-fi
+ENV_FILE="${ENV_FILE:-/etc/sashframe/sashframe.env}"
 
 if [ -f "$ENV_FILE" ]; then
   # Source without failing if file has root permissions and user has read access
@@ -48,7 +40,8 @@ fi
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
 RCLONE_PHOTO_PATH="${RCLONE_PHOTO_PATH:-Calendar Photos}"
-PHOTO_INPUT_DIR="${PHOTO_INPUT_DIR:-/var/lib/sashframe/photos/incoming}"
+SASHFRAME_PHOTOS_DIR="${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}"
+PHOTO_INCOMING_DIR="${SASHFRAME_PHOTOS_DIR}/incoming"
 RCLONE_CONFIG="${RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
 
 echo "============================================================="
@@ -59,7 +52,7 @@ echo ""
 echo "Configuration:"
 echo "  Remote Name:         ${RCLONE_REMOTE}"
 echo "  Target Drive Folder: ${RCLONE_PHOTO_PATH}"
-echo "  Local Incoming Dir:  ${PHOTO_INPUT_DIR}"
+echo "  Local Incoming Dir:  ${PHOTO_INCOMING_DIR}"
 echo "  Rclone Config File:  ${RCLONE_CONFIG}"
 echo ""
 echo "Next, we will launch 'rclone config' for you to set up '${RCLONE_REMOTE}'."
@@ -146,17 +139,17 @@ fi
 
 # 8. Run test sync into local incoming directory
 echo ""
-echo "Running test photo sync into local incoming directory: ${PHOTO_INPUT_DIR}..."
-if [ ! -d "$PHOTO_INPUT_DIR" ]; then
-  if [ -w "$(dirname "$PHOTO_INPUT_DIR")" ]; then
-    mkdir -p "$PHOTO_INPUT_DIR"
+echo "Running test photo sync into local incoming directory: ${PHOTO_INCOMING_DIR}..."
+if [ ! -d "$PHOTO_INCOMING_DIR" ]; then
+  if [ -w "$(dirname "$PHOTO_INCOMING_DIR")" ]; then
+    mkdir -p "$PHOTO_INCOMING_DIR"
   else
-    sudo mkdir -p "$PHOTO_INPUT_DIR"
-    sudo chown -R "$(id -un):$(id -gn)" "$PHOTO_INPUT_DIR"
+    sudo mkdir -p "$PHOTO_INCOMING_DIR"
+    sudo chown -R "$(id -un):$(id -gn)" "$PHOTO_INCOMING_DIR"
   fi
 fi
 
-if ! rclone --config "$RCLONE_CONFIG" sync "${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}" "${PHOTO_INPUT_DIR}"; then
+if ! rclone --config "$RCLONE_CONFIG" sync "${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}" "${PHOTO_INCOMING_DIR}"; then
   echo "[Error] Test photo sync failed." >&2
   echo "Please check directory permissions and rclone access." >&2
   exit 1
@@ -175,13 +168,6 @@ if command -v systemctl >/dev/null 2>&1; then
     echo " Systemd Timer Status:"
     echo "============================================================="
     systemctl status sashframe-photo-sync.timer --no-pager || true
-  else
-    sudo systemctl enable --now home-calendar-photo-sync.timer
-    echo ""
-    echo "============================================================="
-    echo " Systemd Timer Status:"
-    echo "============================================================="
-    systemctl status home-calendar-photo-sync.timer --no-pager || true
   fi
 else
   echo "[Notice] systemctl not found (non-systemd environment). Skipping timer activation."
@@ -194,7 +180,7 @@ echo "============================================================="
 echo " Photos will sync automatically from:"
 echo "   Google Drive: '${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}'"
 echo " to local incoming folder:"
-echo "   '${PHOTO_INPUT_DIR}'"
+echo "   '${PHOTO_INCOMING_DIR}'"
 echo ""
 echo " Timer interval: Every 5 minutes (and 1 minute after system boot)."
 echo " Manual sync command: bash scripts/sync-photos.sh"

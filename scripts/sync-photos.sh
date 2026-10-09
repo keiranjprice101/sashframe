@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -z "${ENV_FILE:-}" ]; then
-  if [ -f "/etc/sashframe/sashframe.env" ]; then
-    ENV_FILE="/etc/sashframe/sashframe.env"
-  elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-    ENV_FILE="/etc/home-calendar/home-calendar.env"
-  else
-    ENV_FILE="/etc/sashframe/sashframe.env"
-  fi
-fi
+ENV_FILE="${ENV_FILE:-/etc/sashframe/sashframe.env}"
 
 # 1. Source environment file if present, or fail clearly
 if [ -f "$ENV_FILE" ]; then
@@ -23,11 +15,12 @@ else
   exit 1
 fi
 
-# 2. Validate required variables
+# 2. Derive canonical host photo incoming directory
+SASHFRAME_PHOTOS_DIR="${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}"
+PHOTO_INCOMING_DIR="${SASHFRAME_PHOTOS_DIR}/incoming"
+
+# 3. Validate required variables
 MISSING_VARS=()
-if [ -z "${PHOTO_INPUT_DIR:-}" ]; then
-  MISSING_VARS+=("PHOTO_INPUT_DIR")
-fi
 if [ -z "${RCLONE_REMOTE:-}" ]; then
   MISSING_VARS+=("RCLONE_REMOTE")
 fi
@@ -40,13 +33,13 @@ if [ ${#MISSING_VARS[@]} -gt 0 ]; then
   exit 1
 fi
 
-# 3. Verify rclone binary
+# 4. Verify rclone binary
 if ! command -v rclone >/dev/null 2>&1; then
   echo "[Error] rclone binary is not installed or not in PATH." >&2
   exit 1
 fi
 
-# 4. Prepare rclone arguments
+# 5. Prepare rclone arguments
 RCLONE_ARGS=()
 if [ -n "${RCLONE_CONFIG:-}" ]; then
   if [ ! -f "$RCLONE_CONFIG" ]; then
@@ -57,17 +50,17 @@ if [ -n "${RCLONE_CONFIG:-}" ]; then
   RCLONE_ARGS+=("--config" "$RCLONE_CONFIG")
 fi
 
-# 5. Ensure local incoming directory exists
-mkdir -p "$PHOTO_INPUT_DIR"
+# 6. Ensure local incoming directory exists
+mkdir -p "$PHOTO_INCOMING_DIR"
 
 if [ -n "${RCLONE_PHOTO_PATH:-}" ]; then
   REMOTE_TARGET="${RCLONE_REMOTE}:${RCLONE_PHOTO_PATH}"
 else
   REMOTE_TARGET="${RCLONE_REMOTE}:"
 fi
-echo "[Sync] Starting photo sync from '${REMOTE_TARGET}' into '${PHOTO_INPUT_DIR}'..."
+echo "[Sync] Starting photo sync from '${REMOTE_TARGET}' into '${PHOTO_INCOMING_DIR}'..."
 
-# 6. Execute rclone sync
-rclone sync "${RCLONE_ARGS[@]}" "${REMOTE_TARGET}" "${PHOTO_INPUT_DIR}"
+# 7. Execute rclone sync
+rclone sync "${RCLONE_ARGS[@]}" "${REMOTE_TARGET}" "${PHOTO_INCOMING_DIR}"
 
 echo "[Sync] Photo sync completed successfully at $(date -u '+%Y-%m-%d %H:%M:%SZ')."

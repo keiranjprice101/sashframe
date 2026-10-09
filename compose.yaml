@@ -20,8 +20,8 @@ services:
       - SHIFTER_INPUT_DIR=/data/calendar
       - SHIFTER_FILE_PATH=/data/calendar/calendar.Shifter
     volumes:
-      - ${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}:/data/photos:ro
-      - ${SASHFRAME_CALENDAR_DIR:-${SHIFTER_INPUT_DIR:-/var/lib/sashframe/calendar}}:/data/calendar:ro
+      - ${SASHFRAME_PHOTOS_DIR:-./data/photos}:/data/photos:ro
+      - ${SASHFRAME_CALENDAR_DIR:-./data/shifter}:/data/calendar:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4321/health"]
       interval: 15s
@@ -45,7 +45,7 @@ services:
       - PHOTO_INPUT_DIR=/data/photos/incoming
       - PHOTO_OUTPUT_DIR=/data/photos/processed
       - PHOTO_MANIFEST=/data/photos/manifest.json
-      - PHOTO_MAX_SIZE=1920
-      - PHOTO_QUALITY=85
+      - PHOTO_MAX_SIZE=${PHOTO_MAX_SIZE:-1920}
+      - PHOTO_QUALITY=${PHOTO_QUALITY:-85}
     volumes:
-      - ${SASHFRAME_PHOTOS_DIR:-/var/lib/sashframe/photos}:/data/photos:rw
+      - ${SASHFRAME_PHOTOS_DIR:-./data/photos}:/data/photos:rw

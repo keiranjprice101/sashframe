@@ -247,27 +247,55 @@ bash scripts/update.sh
 
 ## ⚙️ Configuration (`/etc/sashframe/sashframe.env`)
 
-Production environment variables are managed in `/etc/sashframe/sashframe.env` (with fallback to `/etc/home-calendar/home-calendar.env` for legacy setups):
+Sashframe uses a single canonical configuration file on the production host:
+`/etc/sashframe/sashframe.env` (a template is available in `config/sashframe.env.example`).
+
+### Host Paths vs. Container Mount Paths
+
+Host filesystem paths and Docker container paths are deliberately distinct:
+
+- **Production Host Configuration**: `/etc/sashframe/sashframe.env`
+- **Production Host Persistent Data**: `/var/lib/sashframe/`
+  - Photos: `/var/lib/sashframe/photos/` (`incoming/`, `processed/`, `manifest.json`)
+  - Calendar: `/var/lib/sashframe/calendar/` (`incoming/`, `calendar.Shifter`)
+  - State: `/var/lib/sashframe/state/`
+  - Database: `/var/lib/sashframe/database/`
+- **Local Development Data**: Repo-local `./data/` (`./data/photos/`, `./data/shifter/`, etc.)
+- **Docker Container Mounts**:
+  - Host photo directory (`/var/lib/sashframe/photos`) is mounted into containers as `/data/photos`
+  - Host calendar directory (`/var/lib/sashframe/calendar`) is mounted into containers as `/data/calendar`
+
+Inside containers, services reference `/data/photos` and `/data/calendar`. Host syncing scripts and systemd units reference `/var/lib/sashframe/` paths via `SASHFRAME_*` environment variables.
+
+### Authoritative Production Configuration
 
 ```env
-# Photo storage paths
-PHOTO_INPUT_DIR=/var/lib/sashframe/photos/incoming
-PHOTO_OUTPUT_DIR=/var/lib/sashframe/photos/processed
-PHOTO_MANIFEST=/var/lib/sashframe/photos/manifest.json
+# Host process user/group mappings (UID/GID for file permissions in containers)
+PUID=1000
+PGID=1000
+
+# Canonical Host Storage Directories
+SASHFRAME_DATA_DIR=/var/lib/sashframe
+SASHFRAME_PHOTOS_DIR=/var/lib/sashframe/photos
+SASHFRAME_CALENDAR_DIR=/var/lib/sashframe/calendar
+SASHFRAME_STATE_DIR=/var/lib/sashframe/state
+SASHFRAME_DATABASE_DIR=/var/lib/sashframe/database
+
+# Photo Ingestion & Processing Configuration
 PHOTO_MAX_SIZE=1920
 PHOTO_QUALITY=85
 
-# Google Drive photo sync configuration
+# Host Google Drive Photo Sync (rclone)
 RCLONE_REMOTE=gdrive
 RCLONE_PHOTO_PATH="Calendar Photos"
-RCLONE_CONFIG=/home/pi/.config/rclone/rclone.conf
 
-# Shifter calendar configuration
+# Host Google Drive Shifter Calendar Sync (rclone)
 RCLONE_SHIFTER_REMOTE=gdrive
 RCLONE_SHIFTER_FOLDER_ID=""
 RCLONE_SHIFTER_PATH=""
-SHIFTER_INPUT_DIR=/var/lib/sashframe/calendar
-SHIFTER_FILE_PATH=/var/lib/sashframe/calendar/calendar.Shifter
+
+# Path to host rclone configuration file
+RCLONE_CONFIG=/home/pi/.config/rclone/rclone.conf
 ```
 
 ---

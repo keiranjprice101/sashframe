@@ -6,8 +6,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 User=@INSTALL_USER@
-EnvironmentFile=-/etc/sashframe/sashframe.env
-EnvironmentFile=-/etc/home-calendar/home-calendar.env
+EnvironmentFile=/etc/sashframe/sashframe.env
 ExecStart=/bin/bash @REPO_ROOT@/scripts/sync-photos.sh
 StandardOutput=journal
 StandardError=journal

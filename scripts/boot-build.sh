@@ -15,9 +15,6 @@ cd "$ROOT_DIR"
 if [ -f "/etc/sashframe/sashframe.env" ]; then
   # shellcheck source=/dev/null
   source "/etc/sashframe/sashframe.env"
-elif [ -f "/etc/home-calendar/home-calendar.env" ]; then
-  # shellcheck source=/dev/null
-  source "/etc/home-calendar/home-calendar.env"
 fi
 
 # Determine Compose command
@@ -57,17 +54,23 @@ if [ "${BOOT_CHECK_GIT:-true}" = "true" ] && git rev-parse --is-inside-work-tree
   fi
 fi
 
+# Setup Compose environment file argument
+COMPOSE_ENV_ARGS=()
+if [ -f "/etc/sashframe/sashframe.env" ]; then
+  COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
+fi
+
 # 2. Build Docker images from current code
 GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
 log "Building Docker images tagged '${GIT_SHA}'..."
-IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" build
+IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build
 
 # 3. Start containers with the freshly built images
 log "Starting application containers with freshly built images..."
-IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" up -d --remove-orphans
+IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans
 
 # 4. Record deployed SHA
-STATE_DIR="/var/lib/sashframe/state"
+STATE_DIR="${SASHFRAME_STATE_DIR:-/var/lib/sashframe/state}"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 echo "$GIT_SHA" > "$STATE_DIR/deployed-sha" 2>/dev/null || true
 
