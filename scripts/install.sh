@@ -261,13 +261,13 @@ EOF"
   fi
 fi
 
-# Ensure helper scripts are executable
 chmod +x "$ROOT_DIR/scripts/start.sh" 2>/dev/null || true
+chmod +x "$ROOT_DIR/scripts/start-app.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/sync-photos.sh" 2>/dev/null || true
+chmod +x "$ROOT_DIR/scripts/process-photos.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/sync-shifter.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/setup-google-drive-shifter.sh" 2>/dev/null || true
-chmod +x "$ROOT_DIR/scripts/boot-build.sh" 2>/dev/null || true
 chmod +x "$ROOT_DIR/scripts/update.sh" 2>/dev/null || true
 
 # Set up transparent cursor theme on host to suppress cursor in Cage and Chromium
@@ -314,13 +314,18 @@ if [ -d "$SYSTEMD_DIR" ]; then
     fi
   }
 
-  install_unit "$ROOT_DIR/systemd/sashframe-boot-build.service" "$SYSTEMD_DIR/sashframe-boot-build.service"
+  install_unit "$ROOT_DIR/systemd/sashframe-app.service" "$SYSTEMD_DIR/sashframe-app.service"
   install_unit "$ROOT_DIR/systemd/sashframe-kiosk.service" "$SYSTEMD_DIR/sashframe-kiosk.service"
   install_unit "$ROOT_DIR/systemd/sashframe-photo-sync.service" "$SYSTEMD_DIR/sashframe-photo-sync.service"
   install_unit "$ROOT_DIR/systemd/sashframe-shifter-sync.service" "$SYSTEMD_DIR/sashframe-shifter-sync.service"
   install_unit "$ROOT_DIR/systemd/sashframe-shifter-sync.timer" "$SYSTEMD_DIR/sashframe-shifter-sync.timer"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
-  install_unit "$ROOT_DIR/systemd/sashframe-updater.timer" "$SYSTEMD_DIR/sashframe-updater.timer"
+
+  # Clean up legacy boot-build service if present
+  if [ -f "$SYSTEMD_DIR/sashframe-boot-build.service" ]; then
+    run_as_root systemctl disable --now sashframe-boot-build.service 2>/dev/null || true
+    run_as_root rm -f "$SYSTEMD_DIR/sashframe-boot-build.service" 2>/dev/null || true
+  fi
 
   # Clean up legacy photo sync timer if present
   if [ -f "$SYSTEMD_DIR/sashframe-photo-sync.timer" ]; then
@@ -328,12 +333,18 @@ if [ -d "$SYSTEMD_DIR" ]; then
     run_as_root rm -f "$SYSTEMD_DIR/sashframe-photo-sync.timer" "$SYSTEMD_DIR/timers.target.wants/sashframe-photo-sync.timer" 2>/dev/null || true
   fi
 
+  # Clean up legacy recurring updater timer if present
+  if [ -f "$SYSTEMD_DIR/sashframe-updater.timer" ]; then
+    run_as_root systemctl disable --now sashframe-updater.timer 2>/dev/null || true
+    run_as_root rm -f "$SYSTEMD_DIR/sashframe-updater.timer" "$SYSTEMD_DIR/timers.target.wants/sashframe-updater.timer" 2>/dev/null || true
+  fi
+
   if command -v systemctl >/dev/null 2>&1; then
     run_as_root systemctl daemon-reload
-    # Enable power-on Docker build service (builds and launches fresh containers on boot)
-    run_as_root systemctl enable sashframe-boot-build.service 2>/dev/null || true
-    # Enable updater timer by default
-    run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
+    # Enable application startup service
+    run_as_root systemctl enable sashframe-app.service 2>/dev/null || true
+    # Enable power-on software updater service
+    run_as_root systemctl enable sashframe-updater.service 2>/dev/null || true
     # Enable shifter sync timer by default (runs every 5 minutes)
     run_as_root systemctl enable --now sashframe-shifter-sync.timer 2>/dev/null || true
     # Enable kiosk service on boot by default (starts Cage/Chromium on tty1)
@@ -423,8 +434,8 @@ if [ "$GDRIVE_READY" = true ]; then
   echo " Google Drive photo sync is ACTIVE."
 fi
 echo " Google Drive Shifter calendar timer is ACTIVE (every 5m)."
-echo " Power-on Docker rebuild service is ACTIVE (sashframe-boot-build.service)."
-echo " Auto-updater timer is ACTIVE."
+echo " Power-on application startup is ACTIVE (sashframe-app.service)."
+echo " Power-on software auto-updater is ENABLED (sashframe-updater.service)."
 echo " Kiosk display service is ENABLED on boot."
 echo ""
 echo " NEXT STEPS:"

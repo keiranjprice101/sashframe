@@ -92,13 +92,28 @@ ensure_systemd_units_installed() {
     fi
   }
 
-  install_unit_if_missing "sashframe-boot-build.service"
+  install_unit_if_missing "sashframe-app.service"
   install_unit_if_missing "sashframe-kiosk.service"
   install_unit_if_missing "sashframe-photo-sync.service"
   install_unit_if_missing "sashframe-shifter-sync.service"
   install_unit_if_missing "sashframe-shifter-sync.timer"
   install_unit_if_missing "sashframe-updater.service"
-  install_unit_if_missing "sashframe-updater.timer"
+
+  # Clean up legacy boot-build service if present
+  if [ -f "$systemd_dir/sashframe-boot-build.service" ]; then
+    echo "[Setup] Retiring legacy power-on build service..."
+    run_as_root systemctl disable --now sashframe-boot-build.service 2>/dev/null || true
+    run_as_root rm -f "$systemd_dir/sashframe-boot-build.service" 2>/dev/null || true
+    run_as_root systemctl daemon-reload 2>/dev/null || true
+  fi
+
+  # Clean up legacy auto-updater timer if present
+  if [ -f "$systemd_dir/sashframe-updater.timer" ]; then
+    echo "[Setup] Retiring legacy recurring updater timer..."
+    run_as_root systemctl disable --now sashframe-updater.timer 2>/dev/null || true
+    run_as_root rm -f "$systemd_dir/sashframe-updater.timer" "$systemd_dir/timers.target.wants/sashframe-updater.timer" 2>/dev/null || true
+    run_as_root systemctl daemon-reload 2>/dev/null || true
+  fi
 }
 
 # Setup and enable all boot autostart components
@@ -119,8 +134,15 @@ setup_boot_autostart() {
   run_as_root systemctl enable docker 2>/dev/null || true
   run_as_root systemctl start docker 2>/dev/null || true
 
-  echo "Enabling power-on Docker build service..."
-  run_as_root systemctl enable sashframe-boot-build.service 2>/dev/null || true
+  echo "Enabling power-on application startup service..."
+  run_as_root systemctl enable sashframe-app.service 2>/dev/null || true
+
+  # Retire legacy power-on build service
+  if [ -f /etc/systemd/system/sashframe-boot-build.service ]; then
+    echo "Retiring legacy power-on build service..."
+    run_as_root systemctl disable --now sashframe-boot-build.service 2>/dev/null || true
+    run_as_root rm -f /etc/systemd/system/sashframe-boot-build.service 2>/dev/null || true
+  fi
 
   echo "Enabling power-on photo ingestion service..."
   run_as_root systemctl enable sashframe-photo-sync.service 2>/dev/null || true
@@ -132,8 +154,15 @@ setup_boot_autostart() {
     run_as_root rm -f /etc/systemd/system/sashframe-photo-sync.timer /etc/systemd/system/timers.target.wants/sashframe-photo-sync.timer 2>/dev/null || true
   fi
 
-  echo "Enabling auto-updater timer..."
-  run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
+  # Clean up legacy recurring updater timer if present
+  if [ -f /etc/systemd/system/sashframe-updater.timer ]; then
+    echo "Retiring legacy recurring updater timer..."
+    run_as_root systemctl disable --now sashframe-updater.timer 2>/dev/null || true
+    run_as_root rm -f /etc/systemd/system/sashframe-updater.timer /etc/systemd/system/timers.target.wants/sashframe-updater.timer 2>/dev/null || true
+  fi
+
+  echo "Enabling power-on software updater service..."
+  run_as_root systemctl enable sashframe-updater.service 2>/dev/null || true
 
   echo "Enabling shifter calendar sync timer..."
   run_as_root systemctl enable --now sashframe-shifter-sync.timer 2>/dev/null || true
@@ -144,53 +173,17 @@ setup_boot_autostart() {
   echo ""
   echo "✓ Sashframe is now configured to start automatically on power-on:"
   echo "  - Docker daemon (application containers)"
-  echo "  - Power-on Docker build (sashframe-boot-build.service)"
+  echo "  - Known-good app startup (sashframe-app.service)"
   echo "  - Power-on photo ingestion (sashframe-photo-sync.service)"
   echo "  - Shifter calendar sync timer (sashframe-shifter-sync.timer)"
-  echo "  - Auto-updater timer (sashframe-updater.timer)"
+  echo "  - Power-on software updater (sashframe-updater.service)"
   echo "  - Kiosk display on tty1 (sashframe-kiosk.service)"
   echo "=========================================="
 }
 
-# Start Docker containers
+# Start Docker containers using known-good release
 start_docker_stack() {
-  local compose_str
-  compose_str="$(get_compose_cmd)"
-
-  if [ -z "$compose_str" ]; then
-    echo "[Error] Neither docker compose nor podman-compose found." >&2
-    return 1
-  fi
-
-  # Split compose command into array
-  read -r -a COMPOSE_CMD <<< "$compose_str"
-
-  # Ensure docker daemon is active if systemctl exists
-  if command -v systemctl >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
-    if ! systemctl is-active --quiet docker 2>/dev/null; then
-      echo "[Docker] Starting Docker daemon..."
-      run_as_root systemctl start docker 2>/dev/null || true
-    fi
-  fi
-
-  local compose_env_args=()
-  if [ -f "/etc/sashframe/sashframe.env" ]; then
-    compose_env_args=(--env-file "/etc/sashframe/sashframe.env")
-  fi
-
-  GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
-
-  # Build Docker images on startup if not already built during this boot session
-  if [ ! -f "/run/sashframe-boot-built" ]; then
-    echo "[Docker] Building Sashframe application images for tag '${GIT_SHA}'..."
-    IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" --profile tools build
-    docker tag "sashframe-app:$GIT_SHA" "sashframe-app:latest" 2>/dev/null || true
-    docker tag "sashframe-photo-processor:$GIT_SHA" "sashframe-photo-processor:latest" 2>/dev/null || true
-    touch "/run/sashframe-boot-built" 2>/dev/null || true
-  fi
-
-  echo "[Docker] Ensuring Sashframe application containers are running (${GIT_SHA})..."
-  IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" up -d --remove-orphans
+  "$ROOT_DIR/scripts/start-app.sh"
 }
 
 # Ensure background timers are active
@@ -199,14 +192,14 @@ start_background_timers() {
     return 0
   fi
 
-  # 1. Updater timer
-  if systemctl list-unit-files sashframe-updater.timer >/dev/null 2>&1; then
-    if ! systemctl is-active --quiet sashframe-updater.timer 2>/dev/null; then
-      echo "[Systemd] Starting auto-updater timer..."
-      run_as_root systemctl start sashframe-updater.timer 2>/dev/null || true
+  # Shifter calendar sync timer
+  if systemctl list-unit-files sashframe-shifter-sync.timer >/dev/null 2>&1; then
+    if ! systemctl is-active --quiet sashframe-shifter-sync.timer 2>/dev/null; then
+      echo "[Systemd] Starting Shifter calendar sync timer..."
+      run_as_root systemctl start sashframe-shifter-sync.timer 2>/dev/null || true
     fi
-    if ! systemctl is-enabled --quiet sashframe-updater.timer 2>/dev/null; then
-      run_as_root systemctl enable sashframe-updater.timer 2>/dev/null || true
+    if ! systemctl is-enabled --quiet sashframe-shifter-sync.timer 2>/dev/null; then
+      run_as_root systemctl enable sashframe-shifter-sync.timer 2>/dev/null || true
     fi
   fi
 }
@@ -435,7 +428,7 @@ print_status() {
   # 3. Systemd units status
   if command -v systemctl >/dev/null 2>&1; then
     echo "--- Systemd Services & Timers ---"
-    for unit in sashframe-kiosk.service sashframe-photo-sync.service sashframe-updater.timer docker.service; do
+    for unit in sashframe-app.service sashframe-kiosk.service sashframe-updater.service sashframe-photo-sync.service sashframe-shifter-sync.timer docker.service; do
       if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
         local active_status enabled_status
         active_status="$(systemctl is-active "$unit" 2>/dev/null || echo "inactive")"
@@ -516,7 +509,6 @@ done
 case "$MODE" in
   kiosk_only)
     start_docker_stack
-    start_background_timers
     wait_for_health
     launch_kiosk
     ;;

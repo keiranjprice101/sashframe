@@ -16,10 +16,10 @@ Sashframe divides responsibilities cleanly between the Raspberry Pi host OS and 
 ```text
 Raspberry Pi Host (Raspberry Pi OS Lite)
 ├── Systemd Host Services & Timers
-│   ├── sashframe-boot-build.service  # Rebuilds & launches Docker Compose images on power-on
-│   ├── sashframe-photo-sync.service  # Power-on Google Drive sync & batch photo ingestion
+│   ├── sashframe-app.service         # Starts known-good Docker image & verifies /health on power-on
 │   ├── sashframe-kiosk.service       # Launches Chromium under Cage on tty1 on boot
-│   ├── sashframe-updater.timer       # Polls GitHub origin/main every 5 min, builds & deploys
+│   ├── sashframe-photo-sync.service  # Power-on Google Drive sync & batch photo ingestion
+│   ├── sashframe-updater.service     # Power-on one-shot software updater (no recurring timer)
 │   └── sashframe-shifter-sync.timer  # Syncs .Shifter calendar database from Google Drive every 5 min
 ├── Docker Compose Application Services
 │   ├── sashframe-app                 # Production Node/Astro SSR web server (127.0.0.1:4321)
@@ -40,7 +40,7 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 ### Host OS Responsibilities
 - **Docker Engine & Compose**: Runs containerized application services.
 - **rclone & Google Drive OAuth**: Securely keeps user credentials in `~/.config/rclone/` on the host. Docker containers never have access to Google credentials or `/var/run/docker.sock`.
-- **Systemd Timers & Boot Services**: Drives periodic background operations (`sashframe-updater`, `sashframe-shifter-sync`) and power-on boot ingestion (`sashframe-photo-sync`, `sashframe-boot-build`).
+- **Systemd Timers & Boot Services**: Drives periodic background calendar sync (`sashframe-shifter-sync.timer`) and power-on boot operations (`sashframe-app.service`, `sashframe-kiosk.service`, `sashframe-photo-sync.service`, `sashframe-updater.service`).
 - **Display & Hardware**: Chromium/Cage fullscreen kiosk running locally against `http://127.0.0.1:4321`.
 - **Persistent Household Data**: All photos, manifests, and deployment states reside in `/var/lib/sashframe/`.
 
@@ -141,7 +141,7 @@ The installer:
 4. Generates the central environment configuration at `/etc/sashframe/sashframe.env`.
 5. Builds Docker images tagged with the active Git commit SHA.
 6. Launches the application stack with Docker Compose.
-7. Registers and activates systemd units (`sashframe-kiosk.service` on `tty1`, `sashframe-updater.timer`, `sashframe-photo-sync.service`).
+7. Registers and activates systemd units (`sashframe-app.service`, `sashframe-kiosk.service` on `tty1`, `sashframe-photo-sync.service`, `sashframe-updater.service`, `sashframe-shifter-sync.timer`).
 
 #### Step 2: Configure Google Drive Photo Sync
 Run the non-root interactive helper to authorize Google Drive:
@@ -201,10 +201,11 @@ Sashframe provides a unified startup manager (`scripts/start.sh` / `npm start`) 
 ```
 
 ##### How Power-On Startup Works:
-1. **Docker Daemon** starts on boot (`systemctl enable docker`). The `sashframe-app` container runs with `restart: unless-stopped` serving the application. Photo processing is executed on demand or via batch commands (`npm run photos:process` or `docker compose run --rm sashframe-photo-processor`).
-2. **`sashframe-photo-sync.service`** runs once on boot as a oneshot service (`Type=oneshot`, ordered before `sashframe-kiosk.service`), syncing incoming photos from Google Drive via rclone, running batch reconciliation into `/var/lib/sashframe/photos/processed/`, and verifying `manifest.json` is ready before the kiosk displays.
-3. **`sashframe-updater.timer`** triggers 2 minutes after boot (`OnBootSec=2m`), checking GitHub `origin/main` every 5 minutes for new releases.
-4. **`sashframe-kiosk.service`** runs on `tty1`, waits for `http://127.0.0.1:4321/health` to respond, and launches the **Cage** Wayland compositor with fullscreen Chromium kiosk mode directly onto the HDMI display.
+1. **Docker Daemon** starts on boot (`systemctl enable docker`).
+2. **`sashframe-app.service`** starts the last-known-good Docker container (`sashframe-app:<deployed-sha>`) immediately and verifies `GET /health` is 200 OK without any network or build prerequisites.
+3. **`sashframe-kiosk.service`** starts Cage and Chromium kiosk mode on `tty1` as soon as the known-good application reports healthy, allowing the display to become usable without waiting for network or updates.
+4. **`sashframe-photo-sync.service`** runs once on boot in the background to sync Google Drive photos and reconcile the batch manifest.
+5. **`sashframe-updater.service`** runs once on boot as an independent one-shot service (`Type=oneshot`, ordered after `sashframe-app.service`): checks GitHub `origin/main` for new releases with bounded timeouts, builds candidate images only if a new SHA is detected while the current app continues running, deploys candidate and verifies health, accepts on success or rolls back automatically on failure. (No recurring updater timer during normal uptime).
 
 ##### Standard Docker Compose Controls:
 ```bash
@@ -231,16 +232,17 @@ docker compose down
 
 ## 🔄 Host Auto-Updater (`scripts/update.sh`)
 
-Sashframe includes an automated deployment updater designed to run safely on the host via `sashframe-updater.timer`:
+Sashframe executes software updates exclusively on system power-on via `sashframe-updater.service`:
 
-1. **Remote Polling**: Periodically fetches `origin/main` from GitHub.
-2. **Commit Comparison**: Compares the remote SHA against `/var/lib/sashframe/state/deployed-sha`.
-3. **Safe Source Checkout**: Only proceeds if a new commit is detected.
-4. **Git SHA Tagging**: Builds new Docker images tagged with the commit SHA (`sashframe-app:<sha>`, `sashframe-photo-processor:<sha>`).
-5. **Zero Downtime on Build Failures**: Current running containers are untouched if the image build fails.
-6. **Health Probe Verification**: Starts the new version and polls `GET /health` (`http://127.0.0.1:4321/health`).
-7. **Automated Rollback**: If the new container fails health checks, the updater automatically rolls back to the previously deployed SHA and restores working containers.
-8. **Conservative Cleanup**: Only untagged/dangling images are pruned upon successful deployment.
+1. **Known-Good App First**: The existing deployed release boots immediately, independent of network or Git availability.
+2. **One-Shot Boot Check**: Performs a single opportunistic Git fetch against `origin/main` (with a 25-second bounded network timeout).
+3. **Network Resilient**: If network/DNS fails or times out, the updater logs clearly and exits cleanly without affecting the running application or kiosk.
+4. **Commit Comparison**: Compares the remote SHA against `/var/lib/sashframe/state/deployed-sha`. If identical, exits immediately with zero build overhead.
+5. **Candidate Build Isolation**: When a new SHA exists, builds candidate Docker images (`sashframe-app:<candidate-sha>`) while the known-good application remains running and serving the display.
+6. **Health Probe Verification**: Starts candidate release and polls `GET /health` (`http://127.0.0.1:4321/health`).
+7. **Automated Rollback**: If the candidate fails health checks, the updater immediately stops the candidate, restores the previous known-good image, and verifies health.
+8. **Atomic Release State**: `/var/lib/sashframe/state/deployed-sha` is updated atomically only after health succeeds.
+9. **No Background Timers**: No polling or updater timers run during normal uptime. The next update opportunity is the next system power-on.
 
 To trigger an update check manually on the host:
 ```bash

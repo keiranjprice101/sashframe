@@ -23,7 +23,7 @@ fi
 
 STATE_DIR="${SASHFRAME_STATE_DIR:-/var/lib/sashframe/state}"
 DEPLOYED_SHA="$(cat "$STATE_DIR/deployed-sha" 2>/dev/null || git -C "$ROOT_DIR" rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
-export IMAGE_TAG="${IMAGE_TAG:-$DEPLOYED_SHA}"
+export IMAGE_TAG="${IMAGE_TAG:-${DEPLOYED_SHA:0:8}}"
 
 cd "$ROOT_DIR"
 docker compose "${ENV_ARGS[@]}" run --rm sashframe-photo-processor
