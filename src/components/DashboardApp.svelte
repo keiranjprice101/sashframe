@@ -10,9 +10,10 @@
 
   interface Props {
     initialShifterEvents?: CalendarEvent[];
+    initialCalendarEtag?: string;
   }
 
-  let { initialShifterEvents = [] }: Props = $props();
+  let { initialShifterEvents = [], initialCalendarEtag = '' }: Props = $props();
 
   function resolveCalendarEvents(shifterList: CalendarEvent[]): CalendarEvent[] {
     // If real Shifter events are loaded, display only real calendar data.
@@ -27,6 +28,7 @@
   let events = $state<CalendarEvent[]>(resolveCalendarEvents(initialShifterEvents));
   let theme = $state<'light' | 'dark'>(getAutomaticTheme());
   let currentView = $state<'month' | 'week'>('week');
+  let currentCalendarEtag = initialCalendarEtag;
 
   let solarTimer: ReturnType<typeof setInterval>;
   let viewTimer: ReturnType<typeof setInterval>;
@@ -34,8 +36,22 @@
 
   async function refreshCalendarEvents() {
     try {
-      const res = await fetch('/api/calendar');
+      const headers: Record<string, string> = {};
+      if (currentCalendarEtag) {
+        headers['If-None-Match'] = currentCalendarEtag;
+      }
+      const res = await fetch('/api/calendar', { headers });
+      if (res.status === 304) {
+        // Shifter data has not changed on server; skip parsing and state update
+        return;
+      }
       if (!res.ok) return;
+
+      const etag = res.headers.get('ETag');
+      if (etag) {
+        currentCalendarEtag = etag;
+      }
+
       const data: CalendarEvent[] = await res.json();
       if (Array.isArray(data)) {
         events = resolveCalendarEvents(data);
@@ -55,8 +71,8 @@
       refreshCalendarEvents();
     }
 
-    // Periodically poll Shifter calendar endpoint every 30 seconds
-    calendarTimer = setInterval(refreshCalendarEvents, 30000);
+    // Periodically poll Shifter calendar endpoint every 2 minutes (host syncs every 5 mins)
+    calendarTimer = setInterval(refreshCalendarEvents, 120000);
 
     // Periodically re-evaluate every 30 seconds for sunrise/sunset transitions
     solarTimer = setInterval(() => {

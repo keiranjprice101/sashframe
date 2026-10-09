@@ -12,8 +12,11 @@ import {
   getShiftAccentColor,
   poolEvents,
   loadShifterEvents,
-  sortEvents
+  sortEvents,
+  getShifterFingerprint,
+  clearShifterCache
 } from '../src/lib/shifter.ts';
+import { GET as getCalendarApi } from '../src/pages/api/calendar.ts';
 
 test('1. parseShifterFecha: Correct zero-indexed month conversion and date validation', () => {
   // Test prompt example: 20261008 represents 8 November 2026 rather than 8 October 2026
@@ -456,5 +459,106 @@ test('15. sortEvents: sorts chronologically by date, start time, all-day first, 
   assert.strictEqual(sorted[1].id, 'all-day');
   assert.strictEqual(sorted[2].id, 'a');
   assert.strictEqual(sorted[3].id, 'b');
+});
+
+test('16. getShifterFingerprint: produces deterministic fingerprint and responds to changes', () => {
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+  const fp1 = getShifterFingerprint(samplePath);
+  assert.ok(fp1 && fp1 !== 'empty', 'Fingerprint should not be empty for existing file');
+  assert.ok(fp1.startsWith('Unnamed.Shifter_'), 'Fingerprint should contain filename');
+
+  const fp2 = getShifterFingerprint(samplePath);
+  assert.strictEqual(fp1, fp2, 'Fingerprints must match for unchanged file');
+
+  const missingFp = getShifterFingerprint('/non/existent/path.Shifter');
+  assert.strictEqual(missingFp, 'empty', 'Non-existent file should yield "empty"');
+});
+
+test('17. In-memory caching: reuses parsed events and invalidates when file changes', () => {
+  clearShifterCache();
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+
+  const first = parseShifterFile(samplePath);
+  const second = parseShifterFile(samplePath);
+  assert.strictEqual(first.length, second.length);
+  assert.deepStrictEqual(first, second);
+
+  // Modifying mtime updates cache
+  const tempDbPath = path.resolve('tests/temp_cache_test.sqlite');
+  if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
+
+  const db = new DatabaseSync(tempDbPath);
+  db.exec(`
+    CREATE TABLE tablaTurnos (_id INTEGER PRIMARY KEY, texto TEXT, abreviatura TEXT, horaInicio1 TEXT, horaFinal1 TEXT);
+    CREATE TABLE dias (fecha INTEGER PRIMARY KEY, turno1 INTEGER, turno2 INTEGER, notas TEXT);
+    INSERT INTO tablaTurnos (_id, texto, abreviatura, horaInicio1, horaFinal1) VALUES (1, 'Nurse LD', 'LD', '07:00', '19:30');
+    INSERT INTO dias (fecha, turno1, turno2, notas) VALUES (20260901, 1, 0, 'Initial');
+  `);
+  db.close();
+
+  try {
+    const parsed1 = parseShifterFile(tempDbPath);
+    assert.strictEqual(parsed1.length, 2);
+    const note1 = parsed1.find(e => e.id.includes('-note-'));
+    assert.strictEqual(note1?.description, 'Initial');
+
+    // Second parse hits cache
+    const parsedCached = parseShifterFile(tempDbPath);
+    assert.deepStrictEqual(parsedCached, parsed1);
+
+    // Modify file contents
+    const db2 = new DatabaseSync(tempDbPath);
+    db2.exec(`UPDATE dias SET notas = 'Updated note' WHERE fecha = 20260901;`);
+    db2.close();
+
+    // Ensure mtime is bumped
+    const futureTime = new Date(Date.now() + 2000);
+    fs.utimesSync(tempDbPath, futureTime, futureTime);
+
+    const parsed2 = parseShifterFile(tempDbPath);
+    assert.strictEqual(parsed2.length, 2);
+    const note2 = parsed2.find(e => e.id.includes('-note-'));
+    assert.strictEqual(note2?.description, 'Updated note');
+  } finally {
+    if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
+  }
+});
+
+test('18. /api/calendar endpoint: supports ETag and 304 Not Modified', async () => {
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+  const prevEnv = process.env.SHIFTER_FILE_PATH;
+  process.env.SHIFTER_FILE_PATH = samplePath;
+
+  try {
+    // 1. Initial request without If-None-Match
+    const req1 = new Request('http://localhost:4321/api/calendar');
+    const res1 = await getCalendarApi({ request: req1 } as any);
+    assert.strictEqual(res1.status, 200);
+    const etag = res1.headers.get('ETag');
+    assert.ok(etag, 'Response should contain ETag');
+    const body1 = await res1.json();
+    assert.ok(Array.isArray(body1) && body1.length > 0);
+
+    // 2. Subsequent request with matching If-None-Match
+    const req2 = new Request('http://localhost:4321/api/calendar', {
+      headers: { 'If-None-Match': etag! }
+    });
+    const res2 = await getCalendarApi({ request: req2 } as any);
+    assert.strictEqual(res2.status, 304, 'Matching ETag must return 304 Not Modified');
+    assert.strictEqual(res2.headers.get('ETag'), etag);
+
+    // 3. Request with mismatched If-None-Match
+    const req3 = new Request('http://localhost:4321/api/calendar', {
+      headers: { 'If-None-Match': '"outdated-tag"' }
+    });
+    const res3 = await getCalendarApi({ request: req3 } as any);
+    assert.strictEqual(res3.status, 200, 'Mismatched ETag must return 200 OK');
+  } finally {
+    if (prevEnv !== undefined) {
+      process.env.SHIFTER_FILE_PATH = prevEnv;
+    } else {
+      delete process.env.SHIFTER_FILE_PATH;
+    }
+  }
 });
 

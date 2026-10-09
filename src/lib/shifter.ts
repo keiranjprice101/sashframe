@@ -116,6 +116,59 @@ export function getShifterFilePath(): string | null {
   return allFiles[allFiles.length - 1];
 }
 
+interface ShifterCacheEntry {
+  mtimeMs: number;
+  size: number;
+  ino: number;
+  events: CalendarEvent[];
+}
+
+const fileCache = new Map<string, ShifterCacheEntry>();
+
+/**
+ * Clears the in-memory parsed Shifter database cache.
+ */
+export function clearShifterCache(): void {
+  fileCache.clear();
+}
+
+/**
+ * Computes a lightweight fingerprint/ETag string representing the current state of Shifter files.
+ * Uses file modification timestamp, size, and basename without reading or parsing database contents.
+ */
+export function getShifterFingerprint(explicitPath?: string | string[]): string {
+  const filesToLoad: string[] = [];
+
+  if (explicitPath) {
+    const paths = Array.isArray(explicitPath) ? explicitPath : [explicitPath];
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        filesToLoad.push(p);
+      }
+    }
+  } else {
+    const primary = getShifterFilePath();
+    if (primary && fs.existsSync(primary)) {
+      filesToLoad.push(primary);
+    }
+  }
+
+  if (filesToLoad.length === 0) {
+    return 'empty';
+  }
+
+  const parts = filesToLoad.map(f => {
+    try {
+      const st = fs.statSync(f);
+      return `${path.basename(f)}_${st.mtimeMs.toString(36)}_${st.size.toString(36)}`;
+    } catch {
+      return `${path.basename(f)}_0_0`;
+    }
+  });
+
+  return parts.join(';');
+}
+
 /**
  * Extracts all shift definitions from tablaTurnos.
  */
@@ -135,11 +188,28 @@ export function getShiftDefinitions(db: DatabaseSyncType | any): Map<number, Raw
 /**
  * Safely parses a Shifter SQLite database file and produces normalized CalendarEvents.
  * Opens the database in read-only mode, guaranteeing the source file is never modified.
+ * Utilizes an in-memory cache keyed by path, mtime, size, and inode to eliminate redundant SQLite parsing.
  */
 export function parseShifterFile(filePath: string): CalendarEvent[] {
   if (!fs.existsSync(filePath)) {
     console.warn(`[Shifter] File does not exist: ${filePath}`);
     return [];
+  }
+
+  let stat: fs.Stats | null = null;
+  try {
+    stat = fs.statSync(filePath);
+    const cached = fileCache.get(filePath);
+    if (
+      cached &&
+      cached.mtimeMs === stat.mtimeMs &&
+      cached.size === stat.size &&
+      cached.ino === stat.ino
+    ) {
+      return cached.events.slice();
+    }
+  } catch {
+    // If stat fails, proceed to attempt open
   }
 
   const DatabaseSyncClass = getDatabaseSync();
@@ -252,7 +322,16 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
       }
     }
 
-    return sortEvents(events);
+    const sorted = sortEvents(events);
+    if (stat) {
+      fileCache.set(filePath, {
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        ino: stat.ino,
+        events: sorted
+      });
+    }
+    return sorted.slice();
   } catch (err) {
     console.warn(`[Shifter] Failed to parse Shifter SQLite file '${filePath}':`, err);
     return [];

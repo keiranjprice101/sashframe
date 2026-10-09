@@ -2,10 +2,12 @@
 import '../styles/global.css';
 import DashboardApp from '../components/DashboardApp.svelte';
 import { UK_SOUTH_EAST_SUN_SCHEDULE } from '../lib/sunSchedule';
-import { loadShifterEvents } from '../lib/shifter';
+import { loadShifterEvents, getShifterFingerprint } from '../lib/shifter';
 
 const sunScheduleJson = JSON.stringify(UK_SOUTH_EAST_SUN_SCHEDULE);
 const initialShifterEvents = loadShifterEvents();
+const initialCalendarFingerprint = getShifterFingerprint();
+const initialCalendarEtag = `"${initialCalendarFingerprint}"`;
 ---
 
 <!DOCTYPE html>
@@ -45,7 +47,7 @@ const initialShifterEvents = loadShifterEvents();
   </head>
   <body>
     <div id="app-root">
-      <DashboardApp client:load {initialShifterEvents} />
+      <DashboardApp client:load {initialShifterEvents} {initialCalendarEtag} />
     </div>
   </body>
 </html>

@@ -6,7 +6,7 @@ function getManifestPath(): string {
   return process.env.PHOTO_MANIFEST || path.resolve('data/photos/manifest.json');
 }
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ request }) => {
   const manifestPath = getManifestPath();
   
   if (!fs.existsSync(manifestPath)) {
@@ -19,6 +19,20 @@ export const GET: APIRoute = async () => {
   }
 
   try {
+    const stat = fs.statSync(manifestPath);
+    const etag = `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
+    const ifNoneMatch = request.headers.get('if-none-match');
+
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'ETag': etag,
+          'Cache-Control': 'no-cache',
+        }
+      });
+    }
+
     const raw = fs.readFileSync(manifestPath, 'utf-8');
     // Ensure valid JSON before returning
     JSON.parse(raw);
@@ -26,6 +40,8 @@ export const GET: APIRoute = async () => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'ETag': etag,
+        'Cache-Control': 'no-cache',
       }
     });
   } catch {
@@ -33,6 +49,7 @@ export const GET: APIRoute = async () => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
       }
     });
   }
