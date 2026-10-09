@@ -128,7 +128,7 @@ Individual dev tasks:
 
 Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS machine state (packages, application users/groups, Docker Engine, rclone, Cage, Chromium, and canonical directory structure) as well as installation-specific configuration and Google credential deployment.
 
-> **Current Migration Status**: Ansible currently provisions the base host, installs Google credentials securely (`/etc/sashframe/credentials/google-drive.json`), manages timezone and coordinates, templates `/etc/sashframe/household.json`, and generates `/etc/sashframe/sashframe.env`. Existing scripts (`scripts/install.sh`, `scripts/setup-google-drive.sh`, `scripts/start.sh`) still register and manage Sashframe systemd services and will be migrated in later tasks.
+> **Authoritative Provisioning**: Ansible is the authoritative provisioning engine for the entire Sashframe appliance, managing base host packages, application users and groups, Docker, rclone, Cage, Chromium, filesystem paths, secure Google service account credentials, household configuration, environment files, invisible cursor theme, and all systemd services and timers.
 
 #### 1. Controller Requirements
 - Ansible Core 2.15+ (tested on Ansible 2.21+)
@@ -218,90 +218,39 @@ The play recap should report `changed=0 failed=0`.
 
 ---
 
-### 🍓 2. Production Workflow on Raspberry Pi (Legacy Installer & Services)
+### 🍓 2. Production Appliance Lifecycle & Runtime Controls
 
-#### Step 1: Install & Provision (Legacy Shell Installer)
-Run the installer with `sudo` on the Pi:
-```bash
-git clone git@github.com:keiranjprice101/sashframe.git
-cd sashframe
-sudo ./scripts/install.sh
-```
+Once provisioned by Ansible, the Raspberry Pi runs autonomously with systemd managing all service lifecycles.
 
-The installer:
-1. Provisions minimal host system packages: `docker.io`, `docker-compose-plugin`, `rclone`, `curl`, `cage`, `chromium-browser` (host Python and Node are **not** installed since services run in Docker).
-2. Adds the application user to the `docker`, `video`, `render`, and `input` groups (allowing DRM hardware acceleration and input access without root).
-3. Creates persistent host directories under `/var/lib/sashframe/` with `755` permissions.
-4. Generates the central environment configuration at `/etc/sashframe/sashframe.env`.
-5. Builds Docker images tagged with the active Git commit SHA.
-6. Launches the application stack with Docker Compose.
-7. Registers and activates systemd units (`sashframe-app.service`, `sashframe-kiosk.service` on `tty1`, `sashframe-photo-sync.service`, `sashframe-updater.service`, `sashframe-shifter-sync.timer`).
+#### Systemd Service Topology
 
-#### Step 2: Configure Google Drive Photo Sync
-Run the non-root interactive helper to authorize Google Drive:
-```bash
-./scripts/setup-google-drive.sh
-```
-Follow the prompts to configure the `gdrive` remote and target folder (default: `Calendar Photos`). The helper verifies the connection, performs an initial sync into `/var/lib/sashframe/photos/incoming/`, and enables `sashframe-photo-sync.service` for power-on boot ingestion.
+1. **`sashframe-app.service`**: Power-on oneshot container starter (`scripts/start-app.sh`). Reads the last-known-good release SHA from `/var/lib/sashframe/state/deployed-sha`, verifies the Docker image, launches the container with Docker Compose, and gates progress on HTTP `GET /health` (200 OK).
+2. **`sashframe-kiosk.service`**: Fullscreen kiosk display (`scripts/start.sh --kiosk-only`). Starts Cage (Wayland compositor) and Chromium on `tty1` as soon as the app container is healthy, ensuring the display is usable immediately without waiting for network or updates.
+3. **`sashframe-photo-sync.service`**: Power-on oneshot photo ingestion (`scripts/sync-photos.sh`). Synchronizes incoming photos from Google Drive via rclone and runs the batch reconciliation pipeline via one-shot container execution (`scripts/process-photos.sh`).
+4. **`sashframe-updater.service`**: Power-on oneshot software updater (`scripts/update.sh`). Checks GitHub `origin/main` opportunistically; builds and deploys candidates only if a new SHA is detected; verifies `/health` and automatically rolls back if unhealthy. (Power-on only; no recurring updater timers during normal uptime).
+5. **`sashframe-shifter-sync.timer`**: Recurring 5-minute timer triggering `sashframe-shifter-sync.service` (`scripts/sync-shifter.sh`) to synchronize `.Shifter` calendar SQLite databases from Google Drive.
 
-##### Authenticating Over Headless SSH
-Because Raspberry Pi OS is typically accessed over SSH without a local desktop web browser, use one of the following methods:
+#### Runtime CLI Controls (`scripts/start.sh`)
 
-- **Method A: SSH Port Forwarding (Recommended & Easiest)**  
-  Connect to your Pi with port `53682` forwarded (rclone's local callback port):
-  ```bash
-  ssh -L 53682:127.0.0.1:53682 <user>@<pi-ip>
-  ```
-  Run `./scripts/setup-google-drive.sh`. When prompted `Use web browser to automatically authenticate rclone with remote?`, answer **`y`** (Yes). Open the generated Google authorization URL in your laptop browser and approve access. The browser redirects to `http://127.0.0.1:53682/`, which forwards through the SSH tunnel directly to the Pi's rclone listener.
-
-- **Method B: Headless Remote Authorization**  
-  When prompted `Use web browser to automatically authenticate rclone with remote?`, answer **`n`** (No).  
-  On your desktop/laptop (with `rclone` installed), run:
-  ```bash
-  rclone authorize "drive"
-  ```
-  Approve the browser prompt on your laptop, then copy the output JSON token string (`{"access_token": ...}`) and paste it into the `result>` prompt on your Pi.
-
-- **Method C: Copy Config from Desktop**  
-  If you have already configured Google Drive in rclone on your laptop:
-  ```bash
-  scp ~/.config/rclone/rclone.conf <user>@<pi-ip>:~/.config/rclone/rclone.conf
-  ```
-
-- **Method D: Google Cloud Service Account (Fully Headless / No User OAuth)**  
-  Create a Google Cloud Service Account with Google Drive API enabled, download its private key (`service-account.json`), copy it to your Pi (`~/.config/rclone/service-account.json`), and configure `rclone.conf` with `service_account_file`. Share your Google Drive photo folder with the service account email. No interactive browser login or token expiration ever required.
-
-#### Step 3: Production Service Controls & Kiosk Manager
-
-Sashframe provides a unified startup manager (`scripts/start.sh` / `npm start`) designed for **Raspberry Pi OS Lite**:
+Sashframe provides a runtime manager (`scripts/start.sh` / `npm start`) for interactive control and diagnosis:
 
 ```bash
-# 1. Start all services, activate timers, wait for health, and launch kiosk display
+# 1. Start application container, wait for health, and launch kiosk display
 ./scripts/start.sh
 # or: npm start
 
-# 2. Configure automatic power-on boot autostart
-./scripts/start.sh --setup-boot
-
-# 3. Check live status of containers, HTTP health, timers, and kiosk
+# 2. Check live status of containers, HTTP health, timers, and kiosk
 ./scripts/start.sh --status
 # or: npm run kiosk:status
 
-# 4. Start only the backend Docker containers and timers (headless)
+# 3. Start only the backend Docker containers (headless mode)
 ./scripts/start.sh --stack-only
 
-# 5. Stop all containers and kiosk
+# 4. Stop all containers and kiosk
 ./scripts/start.sh --stop
 ```
 
-##### How Power-On Startup Works:
-1. **Docker Daemon** starts on boot (`systemctl enable docker`).
-2. **`sashframe-app.service`** starts the last-known-good Docker container (`sashframe-app:<deployed-sha>`) immediately and verifies `GET /health` is 200 OK without any network or build prerequisites.
-3. **`sashframe-kiosk.service`** starts Cage and Chromium kiosk mode on `tty1` as soon as the known-good application reports healthy, allowing the display to become usable without waiting for network or updates.
-4. **`sashframe-photo-sync.service`** runs once on boot in the background to sync Google Drive photos and reconcile the batch manifest.
-5. **`sashframe-updater.service`** runs once on boot as an independent one-shot service (`Type=oneshot`, ordered after `sashframe-app.service`): checks GitHub `origin/main` for new releases with bounded timeouts, builds candidate images only if a new SHA is detected while the current app continues running, deploys candidate and verifies health, accepts on success or rolls back automatically on failure. (No recurring updater timer during normal uptime).
-
-##### Standard Docker Compose Controls:
+#### Standard Docker Compose Controls:
 ```bash
 # Check service health and status
 docker compose ps
@@ -319,8 +268,6 @@ docker compose up -d
 docker compose down
 # or: npm run prod:down
 ```
-
-*(Note: `daemon.py` is retired from production; Docker Compose and `sashframe-kiosk.service` manage production).*
 
 ---
 
@@ -419,10 +366,7 @@ Sashframe supports automated imports of shift work schedules exported from the S
    - When new `.Shifter` files are periodically added to the Google Drive folder, Sashframe merges the incoming events into the existing pool.
    - Historical events are preserved, new shifts are added, and duplicates are automatically resolved.
 
-To set up Shifter synchronization with your Google Drive Folder ID:
-```bash
-./scripts/setup-google-drive-shifter.sh
-```
+Google Drive Shifter folder ID is configured declaratively in `ansible/local.yml` (`sashframe_shifter_drive_folder_id`) and managed via Ansible.
 
 ---
 

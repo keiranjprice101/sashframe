@@ -34,6 +34,17 @@
     - "sashframe-photo-sync.timer"
     - "sashframe-updater.timer"
 
+- name: Ensure superseded legacy scripts and directories are absent
+  ansible.builtin.file:
+    path: "{{ sashframe_app_dir }}/{{ item }}"
+    state: absent
+  loop:
+    - "scripts/install.sh"
+    - "scripts/setup-google-drive.sh"
+    - "scripts/setup-google-drive-shifter.sh"
+    - "daemon.py"
+    - "systemd"
+
 # 2. Transparent Cursor Theme for Kiosk
 - name: Configure transparent cursor theme for kiosk display
   ansible.builtin.include_tasks: cursor.yml

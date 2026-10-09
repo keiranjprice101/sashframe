@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Sashframe - Production Startup & Kiosk Manager
+# Sashframe - Kiosk Display & Application Runtime Manager
 #
-# Starts application containers, ensures systemd sync/update timers are active,
-# waits for frontend readiness, and launches Chromium in fullscreen kiosk mode.
+# Launches Chromium in fullscreen kiosk mode under Cage Wayland compositor
+# (Raspberry Pi OS Lite) or active graphical session.
+# Provides status reporting and graceful shutdown controls.
 #
-# Designed specifically for Raspberry Pi OS Lite (via Cage Wayland compositor)
-# as well as desktop graphical sessions.
+# Note: Host system packages, user groups, credentials, and systemd units
+# are provisioned declaratively via Ansible.
 # ==============================================================================
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# 1. Load central configuration
+# 1. Load central environment configuration
 if [ -f "/etc/sashframe/sashframe.env" ]; then
   # shellcheck source=/dev/null
   source "/etc/sashframe/sashframe.env"
@@ -43,164 +44,8 @@ get_compose_cmd() {
     echo "docker-compose"
   elif command -v podman-compose >/dev/null 2>&1; then
     echo "podman-compose"
-  elif [ -x "$ROOT_DIR/.venv/bin/podman-compose" ]; then
-    echo "$ROOT_DIR/.venv/bin/podman-compose"
   else
     echo ""
-  fi
-}
-
-# Ensure user belongs to essential groups on Raspberry Pi
-ensure_user_groups() {
-  local target_user="${SUDO_USER:-$USER}"
-  if [ -z "$target_user" ] || [ "$target_user" = "root" ]; then
-    target_user="$(awk -F: '$3 >= 1000 && $3 < 60000 {print $1; exit}' /etc/passwd 2>/dev/null || echo "pi")"
-  fi
-
-  for grp in docker video render input; do
-    if getent group "$grp" >/dev/null 2>&1; then
-      if ! id -nG "$target_user" 2>/dev/null | grep -qw "$grp"; then
-        echo "[Setup] Adding user '$target_user' to group '$grp'..."
-        run_as_root usermod -aG "$grp" "$target_user" 2>/dev/null || true
-      fi
-    fi
-  done
-}
-
-# Ensure systemd units are installed
-ensure_systemd_units_installed() {
-  local systemd_dir="/etc/systemd/system"
-  if [ ! -d "$systemd_dir" ]; then
-    return 0
-  fi
-
-  local target_user="${SUDO_USER:-$USER}"
-  if [ -z "$target_user" ] || [ "$target_user" = "root" ]; then
-    target_user="$(awk -F: '$3 >= 1000 && $3 < 60000 {print $1; exit}' /etc/passwd 2>/dev/null || echo "pi")"
-  fi
-
-  install_unit_if_missing() {
-    local unit_name="$1"
-    local src="$ROOT_DIR/systemd/$unit_name"
-    local dest="$systemd_dir/$unit_name"
-    if [ -f "$src" ] && [ ! -f "$dest" ]; then
-      echo "[Setup] Installing $unit_name..."
-      run_as_root sed -e "s|@INSTALL_USER@|$target_user|g" -e "s|@REPO_ROOT@|$ROOT_DIR|g" "$src" > "/tmp/$unit_name"
-      run_as_root mv "/tmp/$unit_name" "$dest"
-      run_as_root chmod 644 "$dest"
-      run_as_root systemctl daemon-reload 2>/dev/null || true
-    fi
-  }
-
-  install_unit_if_missing "sashframe-app.service"
-  install_unit_if_missing "sashframe-kiosk.service"
-  install_unit_if_missing "sashframe-photo-sync.service"
-  install_unit_if_missing "sashframe-shifter-sync.service"
-  install_unit_if_missing "sashframe-shifter-sync.timer"
-  install_unit_if_missing "sashframe-updater.service"
-
-  # Clean up legacy boot-build service if present
-  if [ -f "$systemd_dir/sashframe-boot-build.service" ]; then
-    echo "[Setup] Retiring legacy power-on build service..."
-    run_as_root systemctl disable --now sashframe-boot-build.service 2>/dev/null || true
-    run_as_root rm -f "$systemd_dir/sashframe-boot-build.service" 2>/dev/null || true
-    run_as_root systemctl daemon-reload 2>/dev/null || true
-  fi
-
-  # Clean up legacy auto-updater timer if present
-  if [ -f "$systemd_dir/sashframe-updater.timer" ]; then
-    echo "[Setup] Retiring legacy recurring updater timer..."
-    run_as_root systemctl disable --now sashframe-updater.timer 2>/dev/null || true
-    run_as_root rm -f "$systemd_dir/sashframe-updater.timer" "$systemd_dir/timers.target.wants/sashframe-updater.timer" 2>/dev/null || true
-    run_as_root systemctl daemon-reload 2>/dev/null || true
-  fi
-}
-
-# Setup and enable all boot autostart components
-setup_boot_autostart() {
-  echo "=========================================="
-  echo " Configuring Sashframe Power-On Autostart"
-  echo "=========================================="
-
-  ensure_user_groups
-  ensure_systemd_units_installed
-
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo "[Warning] systemctl is not available on this system."
-    return 1
-  fi
-
-  echo "Enabling Docker service..."
-  run_as_root systemctl enable docker 2>/dev/null || true
-  run_as_root systemctl start docker 2>/dev/null || true
-
-  echo "Enabling power-on application startup service..."
-  run_as_root systemctl enable sashframe-app.service 2>/dev/null || true
-
-  # Retire legacy power-on build service
-  if [ -f /etc/systemd/system/sashframe-boot-build.service ]; then
-    echo "Retiring legacy power-on build service..."
-    run_as_root systemctl disable --now sashframe-boot-build.service 2>/dev/null || true
-    run_as_root rm -f /etc/systemd/system/sashframe-boot-build.service 2>/dev/null || true
-  fi
-
-  echo "Enabling power-on photo ingestion service..."
-  run_as_root systemctl enable sashframe-photo-sync.service 2>/dev/null || true
-
-  # Clean up legacy photo sync timer if present
-  if [ -f /etc/systemd/system/sashframe-photo-sync.timer ]; then
-    echo "Retiring legacy recurring photo sync timer..."
-    run_as_root systemctl disable --now sashframe-photo-sync.timer 2>/dev/null || true
-    run_as_root rm -f /etc/systemd/system/sashframe-photo-sync.timer /etc/systemd/system/timers.target.wants/sashframe-photo-sync.timer 2>/dev/null || true
-  fi
-
-  # Clean up legacy recurring updater timer if present
-  if [ -f /etc/systemd/system/sashframe-updater.timer ]; then
-    echo "Retiring legacy recurring updater timer..."
-    run_as_root systemctl disable --now sashframe-updater.timer 2>/dev/null || true
-    run_as_root rm -f /etc/systemd/system/sashframe-updater.timer /etc/systemd/system/timers.target.wants/sashframe-updater.timer 2>/dev/null || true
-  fi
-
-  echo "Enabling power-on software updater service..."
-  run_as_root systemctl enable sashframe-updater.service 2>/dev/null || true
-
-  echo "Enabling shifter calendar sync timer..."
-  run_as_root systemctl enable --now sashframe-shifter-sync.timer 2>/dev/null || true
-
-  echo "Enabling kiosk display service..."
-  run_as_root systemctl enable sashframe-kiosk.service 2>/dev/null || true
-
-  echo ""
-  echo "✓ Sashframe is now configured to start automatically on power-on:"
-  echo "  - Docker daemon (application containers)"
-  echo "  - Known-good app startup (sashframe-app.service)"
-  echo "  - Power-on photo ingestion (sashframe-photo-sync.service)"
-  echo "  - Shifter calendar sync timer (sashframe-shifter-sync.timer)"
-  echo "  - Power-on software updater (sashframe-updater.service)"
-  echo "  - Kiosk display on tty1 (sashframe-kiosk.service)"
-  echo "=========================================="
-}
-
-# Start Docker containers using known-good release
-start_docker_stack() {
-  "$ROOT_DIR/scripts/start-app.sh"
-}
-
-# Ensure background timers are active
-start_background_timers() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    return 0
-  fi
-
-  # Shifter calendar sync timer
-  if systemctl list-unit-files sashframe-shifter-sync.timer >/dev/null 2>&1; then
-    if ! systemctl is-active --quiet sashframe-shifter-sync.timer 2>/dev/null; then
-      echo "[Systemd] Starting Shifter calendar sync timer..."
-      run_as_root systemctl start sashframe-shifter-sync.timer 2>/dev/null || true
-    fi
-    if ! systemctl is-enabled --quiet sashframe-shifter-sync.timer 2>/dev/null; then
-      run_as_root systemctl enable sashframe-shifter-sync.timer 2>/dev/null || true
-    fi
   fi
 }
 
@@ -244,46 +89,6 @@ clean_browser_state() {
         "$HOME/.config/chromium-browser/SingletonSocket" 2>/dev/null || true
 }
 
-# Setup transparent cursor theme to completely suppress cursor in Cage and Wayland/X11
-ensure_transparent_cursor_theme() {
-  local target_home="${HOME}"
-  local icon_dir="${target_home}/.icons/sashframe-transparent"
-  local cursors_dir="${icon_dir}/cursors"
-  local default_icon_dir="${target_home}/.icons/default"
-
-  if [ ! -f "${cursors_dir}/default" ]; then
-    mkdir -p "${cursors_dir}" "${default_icon_dir}" 2>/dev/null || true
-
-    # Decode 68-byte 1x1 transparent Xcursor binary
-    echo "WGN1chAAAAABAAAAAQAAAAIA/f8gAAAAHAAAACQAAAACAP3/IAAAAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=" | \
-      base64 -d > "${cursors_dir}/default" 2>/dev/null || true
-
-    if [ -f "${cursors_dir}/default" ]; then
-      for c in left_ptr right_ptr top_left_arrow arrow pointer hand hand1 hand2 \
-               grab grabbing wait watch progress xterm text ibeam crosshair cross \
-               move size_all help question_arrow dnd-none dnd-move dnd-copy dnd-link \
-               0000816000000681000040808001010c 08e631cbe3823404b201215b04232244; do
-        ln -sf default "${cursors_dir}/${c}" 2>/dev/null || true
-      done
-
-      cat << 'EOF' > "${icon_dir}/index.theme"
-[Icon Theme]
-Name=sashframe-transparent
-Comment=Transparent invisible cursor theme for Sashframe kiosk display
-EOF
-
-      cat << 'EOF' > "${default_icon_dir}/index.theme"
-[Icon Theme]
-Name=default
-Inherits=sashframe-transparent
-EOF
-    fi
-  fi
-
-  export XCURSOR_THEME="sashframe-transparent"
-  export XCURSOR_SIZE=1
-}
-
 # Locate browser binary
 find_browser_bin() {
   for bin in chromium-browser chromium google-chrome; do
@@ -301,13 +106,14 @@ launch_kiosk() {
   browser_bin="$(find_browser_bin)"
 
   if [ -z "$browser_bin" ]; then
-    echo "[Error] No supported browser found (chromium-browser / chromium)!" >&2
-    echo "Please install it with: sudo apt update && sudo apt install -y chromium-browser" >&2
+    echo "[Error] No supported browser found (chromium / chromium-browser)!" >&2
     exit 1
   fi
 
   clean_browser_state
-  ensure_transparent_cursor_theme
+
+  export XCURSOR_THEME="${XCURSOR_THEME:-sashframe-transparent}"
+  export XCURSOR_SIZE="${XCURSOR_SIZE:-1}"
 
   local chromium_flags=(
     --kiosk
@@ -335,20 +141,11 @@ launch_kiosk() {
       exit 1
     fi
 
-    echo "[Kiosk] Remote SSH session detected without an active display."
-    if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files sashframe-kiosk.service >/dev/null 2>&1; then
-      echo "[Kiosk] Starting kiosk display on physical screen via sashframe-kiosk.service..."
-      run_as_root systemctl restart sashframe-kiosk.service 2>/dev/null || true
-      echo ""
-      echo "✓ Kiosk display is running on physical screen (tty1)."
-      echo "✓ Live logs: journalctl -fu sashframe-kiosk.service"
-      return 0
-    else
-      echo "[Kiosk] Installing and starting sashframe-kiosk.service..."
-      ensure_systemd_units_installed
-      run_as_root systemctl restart sashframe-kiosk.service 2>/dev/null || true
-      return 0
-    fi
+    echo "[Kiosk] Remote SSH session detected. Managing physical screen on tty1 via systemd..."
+    run_as_root systemctl restart sashframe-kiosk.service 2>/dev/null || true
+    echo "✓ Kiosk display is running on physical screen (tty1)."
+    echo "✓ Live logs: journalctl -fu sashframe-kiosk.service"
+    return 0
   fi
 
   # Case 1: Active Wayland session
@@ -363,17 +160,13 @@ launch_kiosk() {
     if command -v xset >/dev/null 2>&1; then
       xset s off -dpms s noblank 2>/dev/null || true
     fi
-    if command -v unclutter >/dev/null 2>&1; then
-      unclutter -idle 0.5 -root & 2>/dev/null || true
-    fi
     exec "$browser_bin" "${chromium_flags[@]}" "$KIOSK_URL"
   fi
 
-  # Case 3: Console / TTY (Raspberry Pi OS Lite)
+  # Case 3: Console / TTY (Raspberry Pi OS Lite under Cage)
   if command -v cage >/dev/null 2>&1; then
     echo "[Kiosk] Launching Cage Wayland kiosk compositor on console..."
 
-    # Ensure runtime dir exists
     if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR:-}" ]; then
       export XDG_RUNTIME_DIR="/run/user/$(id -u)"
       mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
@@ -387,8 +180,6 @@ launch_kiosk() {
     exec xinit "$browser_bin" "${chromium_flags[@]}" "$KIOSK_URL" -- -nocursor
   else
     echo "[Error] No display server or Wayland kiosk compositor found!" >&2
-    echo "On Raspberry Pi OS Lite, install Cage and Chromium:" >&2
-    echo "  sudo apt update && sudo apt install -y cage chromium-browser" >&2
     exit 1
   fi
 }
@@ -403,13 +194,13 @@ print_status() {
   local compose_str
   compose_str="$(get_compose_cmd)"
   if [ -n "$compose_str" ]; then
-    read -r -a COMPOSE_CMD <<< "$compose_str"
+    read -r -a compose_cmd <<< "$compose_str"
     local compose_env_args=()
     if [ -f "/etc/sashframe/sashframe.env" ]; then
       compose_env_args=(--env-file "/etc/sashframe/sashframe.env")
     fi
     echo "--- Docker Containers ---"
-    "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" ps || true
+    "${compose_cmd[@]}" "${compose_env_args[@]}" ps || true
   else
     echo "--- Docker Containers ---"
     echo "Docker Compose not available."
@@ -428,7 +219,7 @@ print_status() {
   # 3. Systemd units status
   if command -v systemctl >/dev/null 2>&1; then
     echo "--- Systemd Services & Timers ---"
-    for unit in sashframe-app.service sashframe-kiosk.service sashframe-updater.service sashframe-photo-sync.service sashframe-shifter-sync.timer docker.service; do
+    for unit in sashframe-app.service sashframe-kiosk.service sashframe-photo-sync.service sashframe-updater.service sashframe-shifter-sync.timer docker.service; do
       if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
         local active_status enabled_status
         active_status="$(systemctl is-active "$unit" 2>/dev/null || echo "inactive")"
@@ -452,28 +243,21 @@ stop_all() {
   local compose_str
   compose_str="$(get_compose_cmd)"
   if [ -n "$compose_str" ]; then
-    read -r -a COMPOSE_CMD <<< "$compose_str"
+    read -r -a compose_cmd <<< "$compose_str"
     local compose_env_args=()
     if [ -f "/etc/sashframe/sashframe.env" ]; then
       compose_env_args=(--env-file "/etc/sashframe/sashframe.env")
     fi
-    "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" down
+    "${compose_cmd[@]}" "${compose_env_args[@]}" down
   fi
   echo "[Shutdown] Sashframe stopped."
 }
 
-# ----------------------------------------------------------------------
-# CLI Arguments
-# ----------------------------------------------------------------------
 MODE="full"
 KIOSK_ONLY_MODE="false"
 
 for arg in "$@"; do
   case "$arg" in
-    --setup-boot|--enable-boot|--install-boot)
-      setup_boot_autostart
-      exit 0
-      ;;
     --stack-only|--no-kiosk)
       MODE="stack_only"
       ;;
@@ -493,10 +277,9 @@ for arg in "$@"; do
       echo "Usage: ./scripts/start.sh [options]"
       echo ""
       echo "Options:"
-      echo "  (no args)           Start containers, activate timers, wait for health, and launch kiosk"
-      echo "  --setup-boot        Enable automatic startup on Pi power-on (containers, timers, kiosk)"
-      echo "  --stack-only        Start Docker containers and background timers without launching browser"
+      echo "  (no args)           Start containers, wait for health, and launch kiosk"
       echo "  --kiosk-only        Launch kiosk mode directly (used by systemd sashframe-kiosk.service)"
+      echo "  --stack-only        Start Docker containers without launching browser"
       echo "  --status            Display status of Docker containers, healthcheck, timers, and kiosk"
       echo "  --stop              Stop Docker containers and kiosk service"
       echo "  --help, -h          Show this help message"
@@ -505,26 +288,17 @@ for arg in "$@"; do
   esac
 done
 
-# Main Execution Flow
 case "$MODE" in
   kiosk_only)
-    start_docker_stack
-    wait_for_health
     launch_kiosk
     ;;
   stack_only)
-    start_docker_stack
-    start_background_timers
+    "$ROOT_DIR/scripts/start-app.sh"
     wait_for_health
     echo "✓ Sashframe application stack is running."
     ;;
   full)
-    # Ensure boot units are installed and user has groups
-    ensure_user_groups
-    ensure_systemd_units_installed
-
-    start_docker_stack
-    start_background_timers
+    "$ROOT_DIR/scripts/start-app.sh"
     wait_for_health
     launch_kiosk
     ;;

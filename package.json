@@ -6,7 +6,6 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "setup": "bash scripts/install.sh --dev",
     "dev": "astro dev",
     "dev:astro": "astro dev",
     "photos:process": "bash -c 'if [ -f .venv/bin/python3 ]; then .venv/bin/python3 -m services.photos.process; elif command -v python3 >/dev/null 2>&1; then python3 -m services.photos.process; else docker compose run --rm sashframe-photo-processor; fi'",
@@ -18,9 +17,7 @@
     "prod:ps": "docker compose --env-file /etc/sashframe/sashframe.env ps",
     "start": "bash scripts/start.sh",
     "kiosk": "bash scripts/start.sh",
-    "kiosk:boot": "bash scripts/start.sh --setup-boot",
     "kiosk:status": "bash scripts/start.sh --status",
-    "daemon": "python3 daemon.py",
     "astro": "astro",
     "test": "node --experimental-strip-types --test tests/*.test.ts && (if [ -f .venv/bin/python3 ]; then .venv/bin/python3 -m unittest discover tests; else python3 -m unittest discover tests; fi)"
   },
