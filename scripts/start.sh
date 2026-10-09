@@ -125,6 +125,13 @@ setup_boot_autostart() {
   echo "Enabling power-on photo ingestion service..."
   run_as_root systemctl enable sashframe-photo-sync.service 2>/dev/null || true
 
+  # Clean up legacy photo sync timer if present
+  if [ -f /etc/systemd/system/sashframe-photo-sync.timer ]; then
+    echo "Retiring legacy recurring photo sync timer..."
+    run_as_root systemctl disable --now sashframe-photo-sync.timer 2>/dev/null || true
+    run_as_root rm -f /etc/systemd/system/sashframe-photo-sync.timer /etc/systemd/system/timers.target.wants/sashframe-photo-sync.timer 2>/dev/null || true
+  fi
+
   echo "Enabling auto-updater timer..."
   run_as_root systemctl enable --now sashframe-updater.timer 2>/dev/null || true
 

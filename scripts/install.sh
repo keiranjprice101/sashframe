@@ -322,6 +322,12 @@ if [ -d "$SYSTEMD_DIR" ]; then
   install_unit "$ROOT_DIR/systemd/sashframe-updater.service" "$SYSTEMD_DIR/sashframe-updater.service"
   install_unit "$ROOT_DIR/systemd/sashframe-updater.timer" "$SYSTEMD_DIR/sashframe-updater.timer"
 
+  # Clean up legacy photo sync timer if present
+  if [ -f "$SYSTEMD_DIR/sashframe-photo-sync.timer" ]; then
+    run_as_root systemctl disable --now sashframe-photo-sync.timer 2>/dev/null || true
+    run_as_root rm -f "$SYSTEMD_DIR/sashframe-photo-sync.timer" "$SYSTEMD_DIR/timers.target.wants/sashframe-photo-sync.timer" 2>/dev/null || true
+  fi
+
   if command -v systemctl >/dev/null 2>&1; then
     run_as_root systemctl daemon-reload
     # Enable power-on Docker build service (builds and launches fresh containers on boot)
