@@ -64,6 +64,8 @@ fi
 GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
 log "Building Docker images tagged '${GIT_SHA}'..."
 IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --profile tools build
+docker tag "sashframe-app:$GIT_SHA" "sashframe-app:latest" 2>/dev/null || true
+docker tag "sashframe-photo-processor:$GIT_SHA" "sashframe-photo-processor:latest" 2>/dev/null || true
 
 # 3. Start containers with the freshly built images
 log "Starting application containers with freshly built images..."

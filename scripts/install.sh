@@ -362,7 +362,9 @@ if [ ${#COMPOSE_CMD[@]} -gt 0 ]; then
 
   GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
   echo "  Building Docker images tagged '${GIT_SHA}'..."
-  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build
+  IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --profile tools build
+  run_as_user docker tag "sashframe-app:$GIT_SHA" "sashframe-app:latest" 2>/dev/null || true
+  run_as_user docker tag "sashframe-photo-processor:$GIT_SHA" "sashframe-photo-processor:latest" 2>/dev/null || true
 
   echo "  Starting Sashframe production containers..."
   IMAGE_TAG="$GIT_SHA" run_as_user "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d

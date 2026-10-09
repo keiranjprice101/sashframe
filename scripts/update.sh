@@ -111,11 +111,15 @@ fi
 
 # 4. Build new Docker images tagged with TARGET_TAG
 log "Building Docker images for tag: ${TARGET_TAG}..."
-if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build; then
+if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --profile tools build; then
   log "Error: Docker image build failed for ${TARGET_TAG}. Leaving current deployment running."
   git checkout -f "$PREV_HEAD" --quiet || true
   exit 1
 fi
+
+# Tag latest so one-shot tool executions resolve the active build
+docker tag "sashframe-app:$TARGET_TAG" "sashframe-app:latest" 2>/dev/null || true
+docker tag "sashframe-photo-processor:$TARGET_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
 
 # 5. Deploy the newly built version
 log "Deploying version ${TARGET_TAG} with Docker Compose..."

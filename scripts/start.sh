@@ -184,6 +184,8 @@ start_docker_stack() {
   if [ ! -f "/run/sashframe-boot-built" ]; then
     echo "[Docker] Building Sashframe application images for tag '${GIT_SHA}'..."
     IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" --profile tools build
+    docker tag "sashframe-app:$GIT_SHA" "sashframe-app:latest" 2>/dev/null || true
+    docker tag "sashframe-photo-processor:$GIT_SHA" "sashframe-photo-processor:latest" 2>/dev/null || true
     touch "/run/sashframe-boot-built" 2>/dev/null || true
   fi
 

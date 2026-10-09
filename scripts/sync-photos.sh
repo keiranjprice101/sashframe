@@ -67,22 +67,31 @@ fi
 
 # 4. Step 2: Deterministic batch photo processing
 echo "[Sync] Step 2/2: Executing batch photo reconciliation..."
-export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
-cd "$ROOT_DIR"
-if [ -f "$ROOT_DIR/.venv/bin/python3" ]; then
+if command -v docker >/dev/null 2>&1 && { [ -f "/etc/sashframe/sashframe.env" ] || [ -f "$ROOT_DIR/compose.yaml" ]; }; then
+  STATE_DIR="${SASHFRAME_STATE_DIR:-/var/lib/sashframe/state}"
+  DEPLOYED_SHA="$(cat "$STATE_DIR/deployed-sha" 2>/dev/null || git -C "$ROOT_DIR" rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
+  export IMAGE_TAG="${IMAGE_TAG:-$DEPLOYED_SHA}"
+  COMPOSE_ENV_ARGS=()
+  if [ -f "/etc/sashframe/sashframe.env" ]; then
+    COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
+  fi
+  (cd "$ROOT_DIR" && docker compose "${COMPOSE_ENV_ARGS[@]}" run --rm sashframe-photo-processor)
+elif [ -f "$ROOT_DIR/.venv/bin/python3" ]; then
+  export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
+  cd "$ROOT_DIR"
   "$ROOT_DIR/.venv/bin/python3" -m services.photos.process \
     --incoming "$PHOTO_INCOMING_DIR" \
     --processed "$PHOTO_PROCESSED_DIR" \
     --manifest "$PHOTO_MANIFEST"
 elif command -v python3 >/dev/null 2>&1; then
+  export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
+  cd "$ROOT_DIR"
   python3 -m services.photos.process \
     --incoming "$PHOTO_INCOMING_DIR" \
     --processed "$PHOTO_PROCESSED_DIR" \
     --manifest "$PHOTO_MANIFEST"
-elif command -v docker >/dev/null 2>&1; then
-  docker compose --env-file /etc/sashframe/sashframe.env run --rm sashframe-photo-processor
 else
-  echo "[Sync] Error: Neither Python 3 nor Docker found to execute photo processing." >&2
+  echo "[Sync] Error: Neither Docker nor Python 3 found to execute photo processing." >&2
   exit 1
 fi
 
