@@ -124,9 +124,70 @@ Individual dev tasks:
 
 ---
 
-### 🍓 2. Production Workflow on Raspberry Pi
+### 🤖 Host Provisioning with Ansible (Base Foundation)
 
-#### Step 1: Install & Provision
+Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS machine state (packages, application users/groups, Docker Engine, rclone, Cage, Chromium, and canonical directory structure).
+
+> **Current Migration Status**: At this stage Ansible provisions only the base host. Existing scripts (`scripts/install.sh`, `scripts/setup-google-drive.sh`, `scripts/start.sh`) still provision Sashframe-specific services/configuration and will be migrated in later tasks.
+
+#### 1. Controller Requirements
+- Ansible Core 2.15+ (tested on Ansible 2.21+)
+- Python 3.10+
+- Network/SSH access to the target Raspberry Pi
+
+#### 2. Inventory Setup
+Copy the example inventory to `ansible/inventory.yml` (this file is gitignored to protect network topology and host details):
+```bash
+cp ansible/inventory.example.yml ansible/inventory.yml
+```
+Edit `ansible/inventory.yml` with your Raspberry Pi's hostname or IP address:
+```yaml
+all:
+  hosts:
+    sashframe:
+      ansible_host: 192.168.4.72   # or raspberrypi.local
+      ansible_user: sham
+      ansible_port: 22
+```
+
+#### 3. Configuration & User Customization
+Defaults are configured in `ansible/roles/base/defaults/main.yml`. You can override variables such as `sashframe_user` and `sashframe_group` (default `sham`) in `ansible/group_vars/all.yml` or your inventory.
+
+#### 4. Test Connectivity
+Verify SSH and Python connectivity to the Pi:
+```bash
+ansible -i ansible/inventory.yml sashframe -m ping
+```
+
+#### 5. Syntax & Check Mode
+Verify playbook syntax and run a dry-run check:
+```bash
+# Check syntax
+ansible-playbook --syntax-check -i ansible/inventory.yml ansible/site.yml
+
+# Dry-run check mode
+ansible-playbook --check -i ansible/inventory.yml ansible/site.yml
+```
+
+#### 6. Provision the Base Host
+Execute the base playbook:
+```bash
+ansible-playbook -i ansible/inventory.yml ansible/site.yml
+```
+*Note*: If the target user requires a password for sudo, pass `--ask-become-pass` (or `-K`).
+
+#### 7. Verify Idempotency
+Run the playbook a second time to ensure zero unintended changes:
+```bash
+ansible-playbook -i ansible/inventory.yml ansible/site.yml
+```
+The play recap should report `changed=0 failed=0`.
+
+---
+
+### 🍓 2. Production Workflow on Raspberry Pi (Legacy Installer & Services)
+
+#### Step 1: Install & Provision (Legacy Shell Installer)
 Run the installer with `sudo` on the Pi:
 ```bash
 git clone git@github.com:keiranjprice101/sashframe.git

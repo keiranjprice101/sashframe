@@ -1,0 +1,112 @@
+---
+# ==============================================================================
+# Sashframe Base Host Provisioning Tasks
+# ==============================================================================
+
+# 1. Preflight Validations
+- name: Validate operating system family
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == target_os_family
+    fail_msg: "Unsupported OS family: {{ ansible_facts['os_family'] }}. Sashframe requires {{ target_os_family }}."
+    success_msg: "Operating system family verified: {{ ansible_facts['os_family'] }}"
+
+- name: Validate host CPU architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['architecture'] in supported_architectures
+    fail_msg: "Unsupported CPU architecture: {{ ansible_facts['architecture'] }}. Expected one of: {{ supported_architectures }}."
+    success_msg: "CPU architecture verified: {{ ansible_facts['architecture'] }}"
+
+- name: Validate variable path formats and user definitions
+  ansible.builtin.assert:
+    that:
+      - sashframe_data_root is regex('^/')
+      - sashframe_config_root is regex('^/')
+      - sashframe_user | length > 0
+    fail_msg: "Invalid base variable definitions detected."
+    success_msg: "Base paths and user definitions validated."
+
+# 2. User & Group Management
+- name: Ensure required system device groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ sashframe_user_groups }}"
+
+- name: Ensure Sashframe primary group exists
+  ansible.builtin.group:
+    name: "{{ sashframe_group }}"
+    state: present
+
+- name: Ensure Sashframe application user exists and has required group memberships
+  ansible.builtin.user:
+    name: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    groups: "{{ sashframe_user_groups }}"
+    append: true
+    state: present
+    create_home: true
+    shell: /bin/bash
+
+# 3. System Package Installation
+- name: Install required system packages
+  ansible.builtin.apt:
+    name: "{{ sashframe_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# 4. Service State Management
+- name: Ensure core host services are enabled and running
+  ansible.builtin.service:
+    name: "{{ item.name }}"
+    state: "{{ item.state }}"
+    enabled: "{{ item.enabled }}"
+  loop: "{{ sashframe_services }}"
+
+# 5. Canonical Data Directory Hierarchy (/var/lib/sashframe)
+- name: Ensure canonical persistent data directory hierarchy exists
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    mode: "0755"
+  loop: "{{ sashframe_data_directories }}"
+
+# 6. Canonical Configuration Directory Hierarchy (/etc/sashframe)
+- name: Ensure canonical configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ sashframe_config_directories }}"
+
+# 7. Verification of Installed Toolchain
+- name: Verify Docker Engine version
+  ansible.builtin.command: docker --version
+  register: docker_version_output
+  changed_when: false
+
+- name: Verify Docker Compose plugin version
+  ansible.builtin.command: docker compose version
+  register: compose_version_output
+  changed_when: false
+
+- name: Verify rclone version
+  ansible.builtin.command: rclone version
+  register: rclone_version_output
+  changed_when: false
+
+- name: Verify Cage kiosk compositor binary
+  ansible.builtin.command: which cage
+  register: cage_path_output
+  changed_when: false
+
+- name: Verify Chromium browser binary
+  ansible.builtin.command: which chromium
+  register: chromium_path_output
+  changed_when: false

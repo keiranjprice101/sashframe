@@ -1,0 +1,8 @@
+---
+# Global group variables for Sashframe host provisioning
+target_os_family: "Debian"
+supported_architectures:
+  - "aarch64"
+  - "arm64"
+
+ansible_python_interpreter: /usr/bin/python3

@@ -41,3 +41,9 @@ data/daemon.pid
 data/shifter/
 *.Shifter
 *.shifter
+
+# Ansible local inventory and runtime files
+ansible/inventory.yml
+ansible/inventory.yaml
+ansible/*.retry
+ansible/.vault-pass

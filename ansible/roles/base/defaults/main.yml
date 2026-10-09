@@ -1,0 +1,54 @@
+---
+# Sashframe Application User and Groups
+sashframe_user: "sham"
+sashframe_group: "sham"
+sashframe_user_groups:
+  - docker
+  - video
+  - render
+  - input
+
+# Canonical Filesystem Paths
+sashframe_data_root: "/var/lib/sashframe"
+sashframe_config_root: "/etc/sashframe"
+
+# Canonical Runtime Data Directories under /var/lib/sashframe
+sashframe_data_directories:
+  - "{{ sashframe_data_root }}"
+  - "{{ sashframe_data_root }}/photos"
+  - "{{ sashframe_data_root }}/photos/incoming"
+  - "{{ sashframe_data_root }}/photos/processed"
+  - "{{ sashframe_data_root }}/calendar"
+  - "{{ sashframe_data_root }}/calendar/incoming"
+  - "{{ sashframe_data_root }}/state"
+  - "{{ sashframe_data_root }}/database"
+
+# Configuration Directories under /etc/sashframe
+sashframe_config_directories:
+  - path: "{{ sashframe_config_root }}"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  - path: "{{ sashframe_config_root }}/credentials"
+    owner: "root"
+    group: "{{ sashframe_group }}"
+    mode: "0750"
+
+# Base System Packages required for Sashframe appliance
+sashframe_packages:
+  - docker-ce
+  - docker-ce-cli
+  - docker-compose-plugin
+  - docker-buildx-plugin
+  - rclone
+  - cage
+  - chromium
+  - curl
+  - git
+  - ca-certificates
+
+# System Services
+sashframe_services:
+  - name: docker
+    state: started
+    enabled: true

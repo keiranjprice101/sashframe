@@ -1,0 +1,6 @@
+all:
+  hosts:
+    sashframe:
+      ansible_host: raspberrypi.local
+      ansible_user: sham
+      ansible_port: 22
