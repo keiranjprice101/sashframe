@@ -135,8 +135,20 @@ Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS
 - Python 3.10+
 - Network/SSH access to the target Raspberry Pi
 
-#### 2. Inventory Setup
-Copy the example inventory to `ansible/inventory.yml` (this file is gitignored to protect network topology and host details):
+#### 2. Google Service Account Setup (`sa.json`)
+Sashframe uses an authless, headless Google Service Account to download photos and the `.Shifter` calendar SQLite file from Google Drive via `rclone`:
+
+1. **Create Service Account**: In the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the **Google Drive API**, and create a **Service Account** under *IAM & Admin* -> *Service Accounts*.
+2. **Generate JSON Key**: Under the service account's *Keys* tab, select *Add Key* -> *Create new key* -> *JSON*. Download the key (e.g. `sa.json`).
+3. **Share Google Drive Folders**: Open Google Drive in your browser, and share both your **Photos folder** and your **Shifter folder** with the service account's email address (e.g. `sashframe@your-project.iam.gserviceaccount.com`) with **Viewer** access.
+4. **Copy Folder IDs**: Copy the folder IDs from the Google Drive URLs:
+   - `drive.google.com/drive/folders/<PHOTO_FOLDER_ID>`
+   - `drive.google.com/drive/folders/<SHIFTER_FOLDER_ID>`
+
+> 🔒 **Security Notice**: Keep `sa.json` on your controller machine. Never commit service account keys to Git (`*.json` and `local.yml` are gitignored). Ansible will securely upload the key to `/etc/sashframe/credentials/google-drive.json` on the Pi with restricted `0640` permissions.
+
+#### 3. Inventory Setup
+Copy the example inventory to `ansible/inventory.yml` (this file is gitignored):
 ```bash
 cp ansible/inventory.example.yml ansible/inventory.yml
 ```
@@ -145,33 +157,53 @@ Edit `ansible/inventory.yml` with your Raspberry Pi's hostname or IP address:
 all:
   hosts:
     sashframe:
-      ansible_host: 192.168.4.72   # or raspberrypi.local
+      ansible_host: 192.168.4.72   # or sashframe.local
       ansible_user: sham
       ansible_port: 22
 ```
 
-#### 3. Local Installation Configuration (`local.yml`)
+#### 4. Local Installation Configuration (`local.yml`)
 Copy `ansible/local.example.yml` to `ansible/local.yml` (this file is gitignored):
 ```bash
 cp ansible/local.example.yml ansible/local.yml
 ```
-Fill in your appliance installation values:
-- `sashframe_photo_drive_folder_id`: Google Drive Photo folder ID
-- `sashframe_shifter_drive_folder_id`: Google Drive Shifter calendar folder ID
-- `sashframe_google_service_account_src`: Path to your Google Service Account JSON file on the controller machine (the file remains on the controller and is copied securely by Ansible; never committed to git)
-- `sashframe_timezone`: e.g. `Europe/London`
-- `sashframe_latitude` & `sashframe_longitude`: Geographical coordinates
-- `sashframe_household`: List of household members (`id`, `name`, `color`)
+Edit `ansible/local.yml` and provide your Google Drive folder IDs, path to `sa.json`, and household details:
+```yaml
+---
+# Google Drive Folder IDs
+sashframe_photo_drive_folder_id: "1H0hNW8VePrSPzkxyE_X3sAMYVzq8Z7TW"
+sashframe_shifter_drive_folder_id: "1eZESPK8aKkPMYrOFEyLAiBuCgS1QCDda"
 
-*Note*: If any required installation variable is omitted from `local.yml`, the playbook interactively prompts for it.
+# Absolute path to the Google Service Account JSON file on this controller machine
+sashframe_google_service_account_src: "/path/to/sa.json"
 
-#### 4. Test Connectivity
+# Appliance Timezone & Geo Coordinates (for solar sunset/sunrise schedule)
+sashframe_timezone: "Europe/London"
+sashframe_latitude: 51.453
+sashframe_longitude: -0.902
+
+# Household Members Configuration (color-coded accents)
+sashframe_household:
+  - id: "sasha"
+    name: "Sasha"
+    color: "#2D7A4D"
+  - id: "sham"
+    name: "Sham"
+    color: "#3B7A66"
+  - id: "alex"
+    name: "Alex"
+    color: "#D96B52"
+```
+
+*Note*: If `sashframe_google_service_account_src` or folder IDs are omitted from `local.yml`, the playbook will interactively prompt for them when executed.
+
+#### 5. Test Connectivity
 Verify SSH and Python connectivity to the Pi:
 ```bash
 ansible -i ansible/inventory.yml sashframe -m ping
 ```
 
-#### 5. Syntax & Check Mode
+#### 6. Syntax & Check Mode
 Verify playbook syntax and run a dry-run check:
 ```bash
 # Check syntax
@@ -181,7 +213,7 @@ ansible-playbook --syntax-check -i ansible/inventory.yml ansible/site.yml
 ansible-playbook --check -i ansible/inventory.yml ansible/site.yml
 ```
 
-#### 6. Provision Host, Configuration, and Services
+#### 7. Provision Host, Configuration, and Services
 Execute the playbook:
 ```bash
 ansible-playbook -i ansible/inventory.yml ansible/site.yml
@@ -190,16 +222,20 @@ ansible-playbook -i ansible/inventory.yml ansible/site.yml
 
 What this does:
 1. **Base Role**:
+   - Configures the official Docker CE Debian APT repository and GPG key.
    - Validates controller-side service-account JSON structure and configuration variables.
    - Provisions application user, groups (`docker`, `video`, `render`, `input`), packages, and directories (`/var/lib/sashframe`, `/etc/sashframe`).
    - Backs up existing `/etc/sashframe/sashframe.env` to `/etc/sashframe/sashframe.env.pre-ansible` on first migration.
    - Installs the Google service account credential to `/etc/sashframe/credentials/google-drive.json` with secure permissions (`0640` `root:sham`).
+   - Generates canonical `~/.config/rclone/rclone.conf` with `[gdrive]` and `[gdrive-shifter]` remotes.
    - Generates deterministic `/etc/sashframe/household.json` (`0640` `root:sham`).
    - Generates canonical `/etc/sashframe/sashframe.env` (`0640` `root:sham`) preserving all runtime keys.
    - Sets host timezone (`community.general.timezone`).
 2. **Services Role**:
+   - Clones the Sashframe application repository to `/home/sham/sashframe`.
    - Cleans up legacy systemd units (`sashframe-boot-build.service`, `sashframe-photo-sync.timer`, `sashframe-updater.timer`).
    - Configures the invisible cursor theme (`sashframe-transparent`) for Cage and Chromium kiosk display.
+   - Builds initial Docker images and records initial deployed Git SHA.
    - Templatizes and deploys canonical systemd units:
      - `sashframe-app.service` (oneshot known-good container launch and health gate)
      - `sashframe-kiosk.service` (launches Cage + Chromium on `tty1` after app is healthy)
@@ -209,7 +245,7 @@ What this does:
    - Reloads systemd daemon and manages enablement/active states.
    - Verifies systemd unit file integrity, timer state, kiosk state, and HTTP `/health` (200 OK).
 
-#### 7. Verify Idempotency
+#### 8. Verify Idempotency
 Run the playbook a second time to ensure zero unintended changes:
 ```bash
 ansible-playbook -i ansible/inventory.yml ansible/site.yml
