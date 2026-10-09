@@ -27,16 +27,17 @@ export function getDatabaseSync(): typeof DatabaseSyncType | null {
 }
 
 /**
- * In-memory pool of events across reloads.
- * Preserves historical events and accumulates newly discovered ones.
+ * Deterministically sorts calendar events chronologically by date and start time,
+ * with all-day events ordered first, and event ID as a tie-breaker.
  */
-const globalEventPool = new Map<string, CalendarEvent>();
-
-/**
- * Resets the in-memory Shifter event pool (useful for tests).
- */
-export function clearShifterPool(): void {
-  globalEventPool.clear();
+export function sortEvents(events: CalendarEvent[]): CalendarEvent[] {
+  return events.slice().sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+    if (a.isAllDay && !b.isAllDay) return -1;
+    if (!a.isAllDay && b.isAllDay) return 1;
+    return a.id.localeCompare(b.id);
+  });
 }
 
 /**
@@ -137,6 +138,7 @@ export function getShiftDefinitions(db: DatabaseSyncType | any): Map<number, Raw
  */
 export function parseShifterFile(filePath: string): CalendarEvent[] {
   if (!fs.existsSync(filePath)) {
+    console.warn(`[Shifter] File does not exist: ${filePath}`);
     return [];
   }
 
@@ -146,10 +148,11 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
     return [];
   }
 
-  // Enforce read-only access
-  const db = new DatabaseSyncClass(filePath, { readOnly: true });
-
+  let db: DatabaseSyncType | null = null;
   try {
+    // Enforce read-only access
+    db = new DatabaseSyncClass(filePath, { readOnly: true });
+
     const shiftDefs = getShiftDefinitions(db);
 
     // Query dias table safely
@@ -249,16 +252,24 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
       }
     }
 
-    return events;
+    return sortEvents(events);
+  } catch (err) {
+    console.warn(`[Shifter] Failed to parse Shifter SQLite file '${filePath}':`, err);
+    return [];
   } finally {
-    db.close();
+    if (db) {
+      try {
+        db.close();
+      } catch {
+        // Ignore close error
+      }
+    }
   }
 }
 
 /**
  * Merges incoming events into an existing pool (or array) without duplicates.
- * Preserves existing events and adds or updates them with incoming ones.
- * Results are sorted chronologically by date and start time.
+ * Pure function: merges by stable event ID and sorts deterministically.
  */
 export function poolEvents(
   existingEvents: CalendarEvent[] | Map<string, CalendarEvent>,
@@ -272,60 +283,55 @@ export function poolEvents(
     pool.set(event.id, event);
   }
 
-  return Array.from(pool.values()).sort((a, b) => {
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-    if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
-    if (a.isAllDay && !b.isAllDay) return -1;
-    if (!a.isAllDay && b.isAllDay) return 1;
-    return a.id.localeCompare(b.id);
-  });
+  return sortEvents(Array.from(pool.values()));
 }
 
 /**
- * Loads Shifter events with automatic discovery and pool accumulation.
- * Scans available Shifter files, parses their events, and merges any newly
- * added events into the existing pool without data loss or duplicates.
+ * Loads Shifter events deterministically from persistent storage.
+ * Reads the canonical Shifter database file (or explicit path), parses events in read-only mode,
+ * and returns the normalized, sorted event list.
  *
- * @param explicitPath Optional specific file to load instead of auto-discovery.
- * @param options.reset If true, clears the in-memory pool before loading.
+ * Fully deterministic: identical persistent input produces identical output.
+ * No mutable module-level or in-memory state is retained across requests or process lifetime.
+ *
+ * @param explicitPath Optional specific file path or array of paths to load instead of auto-discovery.
  */
-export function loadShifterEvents(
-  explicitPath?: string,
-  options?: { reset?: boolean }
-): CalendarEvent[] {
-  if (options?.reset) {
-    globalEventPool.clear();
-  }
-
+export function loadShifterEvents(explicitPath?: string | string[]): CalendarEvent[] {
   const filesToLoad: string[] = [];
+
   if (explicitPath) {
-    if (fs.existsSync(explicitPath)) {
-      filesToLoad.push(explicitPath);
+    const paths = Array.isArray(explicitPath) ? explicitPath : [explicitPath];
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        filesToLoad.push(p);
+      } else {
+        console.warn(`[Shifter] Specified path does not exist: ${p}`);
+      }
     }
   } else {
-    filesToLoad.push(...getShifterFiles());
+    const primary = getShifterFilePath();
+    if (primary && fs.existsSync(primary)) {
+      filesToLoad.push(primary);
+    }
   }
 
   if (filesToLoad.length === 0) {
-    return Array.from(globalEventPool.values());
+    return [];
   }
+
+  // Deduplicate across files locally per request (no global/module-level mutable state)
+  const eventMap = new Map<string, CalendarEvent>();
 
   for (const filePath of filesToLoad) {
     try {
       const fileEvents = parseShifterFile(filePath);
       for (const event of fileEvents) {
-        globalEventPool.set(event.id, event);
+        eventMap.set(event.id, event);
       }
     } catch (err) {
       console.warn(`[Shifter] Failed to parse file at ${filePath}:`, err);
     }
   }
 
-  return Array.from(globalEventPool.values()).sort((a, b) => {
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-    if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
-    if (a.isAllDay && !b.isAllDay) return -1;
-    if (!a.isAllDay && b.isAllDay) return 1;
-    return a.id.localeCompare(b.id);
-  });
+  return sortEvents(Array.from(eventMap.values()));
 }

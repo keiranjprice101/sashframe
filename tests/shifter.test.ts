@@ -12,7 +12,7 @@ import {
   getShiftAccentColor,
   poolEvents,
   loadShifterEvents,
-  clearShifterPool
+  sortEvents
 } from '../src/lib/shifter.ts';
 
 test('1. parseShifterFecha: Correct zero-indexed month conversion and date validation', () => {
@@ -318,13 +318,143 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
   assert.strictEqual(pooled[2].date, '2026-10-03');
 });
 
-test('8. loadShifterEvents cumulative discovery and pool loading', () => {
-  clearShifterPool();
+test('8. Determinism: Parsing the same database twice returns equivalent events', () => {
   const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
-  const events = loadShifterEvents(samplePath);
-  assert.ok(events.length > 0);
+  const run1 = parseShifterFile(samplePath);
+  const run2 = parseShifterFile(samplePath);
 
-  // Calling loadShifterEvents again retains events and adds to pool
-  const events2 = loadShifterEvents(samplePath);
-  assert.strictEqual(events2.length, events.length, 'Deduplication ensures pool size is stable');
+  assert.strictEqual(run1.length, run2.length, 'Event counts must match exactly');
+  assert.deepStrictEqual(run1, run2, 'Event contents and ordering must be identical');
 });
+
+test('9. Process-state independence: Calling parser/loader repeatedly does not accumulate events', () => {
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+  const initial = loadShifterEvents(samplePath);
+  assert.ok(initial.length > 0, 'Initial load should produce events');
+
+  // Call 5 times consecutively
+  for (let i = 0; i < 5; i++) {
+    const subsequent = loadShifterEvents(samplePath);
+    assert.strictEqual(subsequent.length, initial.length, `Iteration ${i} must not accumulate events`);
+    assert.deepStrictEqual(subsequent, initial, `Iteration ${i} must produce identical output`);
+  }
+});
+
+test('10. Stable IDs: Event IDs remain stable across parses', () => {
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+  const events = parseShifterFile(samplePath);
+
+  // Validate ID format stability
+  for (const event of events) {
+    assert.ok(
+      event.id.startsWith('shifter-'),
+      `Event ID '${event.id}' must start with 'shifter-'`
+    );
+    assert.ok(
+      event.id.includes('-t1-') || event.id.includes('-t2-') || event.id.includes('-note-'),
+      `Event ID '${event.id}' must indicate shift or note type`
+    );
+  }
+
+  // Second pass: every single ID must match
+  const secondPass = parseShifterFile(samplePath);
+  for (let i = 0; i < events.length; i++) {
+    assert.strictEqual(events[i].id, secondPass[i].id, `ID at index ${i} must match`);
+  }
+});
+
+test('11. Duplicate handling: Multiple identical sources do not create duplicate events', () => {
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+  const singleLoad = loadShifterEvents(samplePath);
+
+  // Pass identical file twice in array
+  const multiLoad = loadShifterEvents([samplePath, samplePath]);
+  assert.strictEqual(multiLoad.length, singleLoad.length, 'Loading same file multiple times must deduplicate');
+  assert.deepStrictEqual(multiLoad, singleLoad, 'Multi-load result must match single load exactly');
+});
+
+test('12. turno1 and turno2: Both shifts on the same day are handled correctly', () => {
+  const tempDbPath = path.resolve('tests/temp_two_shifts.sqlite');
+  if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
+
+  const db = new DatabaseSync(tempDbPath);
+  db.exec(`
+    CREATE TABLE tablaTurnos (_id INTEGER PRIMARY KEY, texto TEXT, abreviatura TEXT, horaInicio1 TEXT, horaFinal1 TEXT);
+    CREATE TABLE dias (fecha INTEGER PRIMARY KEY, turno1 INTEGER, turno2 INTEGER, notas TEXT);
+    
+    INSERT INTO tablaTurnos (_id, texto, abreviatura, horaInicio1, horaFinal1) VALUES 
+      (1, 'Nurse LD', 'LD', '07:00', '19:30'),
+      (2, 'Nurse N', 'Night', '19:30', '07:30');
+    
+    -- Same day with both turno1 and turno2
+    INSERT INTO dias (fecha, turno1, turno2, notas) VALUES (20260915, 1, 2, 'Double shift day');
+  `);
+  db.close();
+
+  try {
+    const events = parseShifterFile(tempDbPath);
+    assert.strictEqual(events.length, 3, 'Should have turno1, turno2, and note event');
+
+    const t1 = events.find(e => e.id.includes('-t1-1'));
+    const t2 = events.find(e => e.id.includes('-t2-2'));
+    const note = events.find(e => e.id.includes('-note-'));
+
+    assert.ok(t1, 'Turno1 event must be present');
+    assert.strictEqual(t1.shiftType, 'ld');
+    assert.strictEqual(t1.startTime, '07:00');
+
+    assert.ok(t2, 'Turno2 event must be present');
+    assert.strictEqual(t2.shiftType, 'night');
+    assert.strictEqual(t2.startTime, '19:30');
+
+    assert.ok(note, 'Note event must be present');
+    assert.strictEqual(note.title, 'Double shift day');
+  } finally {
+    if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
+  }
+});
+
+test('13. Error handling: Missing file and non-database file handled gracefully', () => {
+  // Non-existent file
+  const missingPath = path.resolve('tests/non_existent_calendar.Shifter');
+  const missingEvents = loadShifterEvents(missingPath);
+  assert.deepStrictEqual(missingEvents, [], 'Missing file must return empty array without throwing');
+
+  // Corrupt / invalid non-sqlite file
+  const corruptPath = path.resolve('tests/temp_corrupt.Shifter');
+  fs.writeFileSync(corruptPath, 'This is definitely not an SQLite database file!');
+  try {
+    const corruptEvents = parseShifterFile(corruptPath);
+    assert.deepStrictEqual(corruptEvents, [], 'Corrupt file must return empty array without throwing');
+  } finally {
+    if (fs.existsSync(corruptPath)) fs.unlinkSync(corruptPath);
+  }
+});
+
+test('14. Restart-equivalent behaviour: Independent calls simulate container restart equivalence', () => {
+  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+  
+  // First "container session"
+  const session1Events = loadShifterEvents(samplePath);
+  
+  // Second "container session" (since state is stateless/pure, this behaves identically to post-restart)
+  const session2Events = loadShifterEvents(samplePath);
+  
+  assert.strictEqual(session1Events.length, session2Events.length);
+  assert.deepStrictEqual(session1Events, session2Events);
+});
+
+test('15. sortEvents: sorts chronologically by date, start time, all-day first, and stable ID tie-breaker', () => {
+  const unsorted: CalendarEvent[] = [
+    { id: 'b', title: 'Later', date: '2026-10-05', startTime: '12:00', memberId: 'sasha', isAllDay: false, source: 'shifter' },
+    { id: 'a', title: 'Earlier', date: '2026-10-05', startTime: '08:00', memberId: 'sasha', isAllDay: false, source: 'shifter' },
+    { id: 'all-day', title: 'All Day', date: '2026-10-05', memberId: 'sasha', isAllDay: true, source: 'shifter' },
+    { id: 'diff-day', title: 'Prev Day', date: '2026-10-04', memberId: 'sasha', isAllDay: true, source: 'shifter' }
+  ];
+  const sorted = sortEvents(unsorted);
+  assert.strictEqual(sorted[0].id, 'diff-day');
+  assert.strictEqual(sorted[1].id, 'all-day');
+  assert.strictEqual(sorted[2].id, 'a');
+  assert.strictEqual(sorted[3].id, 'b');
+});
+
