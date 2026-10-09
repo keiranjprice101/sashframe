@@ -3,7 +3,17 @@
 # Sashframe Systemd Services & Timers Management
 # ==============================================================================
 
-# 1. Clean Up Legacy Systemd Units & Timers
+# 1. Application Repository Deployment
+- name: Ensure Sashframe application repository is cloned
+  ansible.builtin.git:
+    repo: "{{ sashframe_repo_url }}"
+    dest: "{{ sashframe_app_dir }}"
+    version: "{{ sashframe_repo_version }}"
+    force: false
+  become: true
+  become_user: "{{ sashframe_user }}"
+
+# 2. Clean Up Legacy Systemd Units & Timers
 - name: Check if legacy systemd unit files exist
   ansible.builtin.stat:
     path: "{{ systemd_unit_dir }}/{{ item }}"
@@ -76,7 +86,55 @@
 - name: Flush handlers to reload systemd daemon if units changed
   ansible.builtin.meta: flush_handlers
 
-# 5. Manage Service and Timer States & Enablement
+# 5. Build Initial Docker Images (if missing)
+- name: Check if sashframe-app Docker image already exists
+  ansible.builtin.command:
+    cmd: "docker image inspect sashframe-app:latest"
+  register: app_image_check
+  failed_when: false
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Build initial Sashframe Docker container images
+  ansible.builtin.command:
+    cmd: "docker compose --env-file {{ sashframe_config_root }}/sashframe.env --profile tools build"
+    chdir: "{{ sashframe_app_dir }}"
+  become: true
+  become_user: "{{ sashframe_user }}"
+  when: not ansible_check_mode and app_image_check.rc != 0
+
+- name: Determine local Git commit SHA
+  ansible.builtin.command:
+    cmd: "git rev-parse HEAD"
+    chdir: "{{ sashframe_app_dir }}"
+  register: local_git_sha_cmd
+  changed_when: false
+  when: not ansible_check_mode and app_image_check.rc != 0
+
+- name: Tag initial Docker images with Git SHA
+  ansible.builtin.command:
+    cmd: "docker tag sashframe-app:latest sashframe-app:{{ local_git_sha_cmd.stdout[:8] }}"
+  become: true
+  become_user: "{{ sashframe_user }}"
+  when: not ansible_check_mode and app_image_check.rc != 0
+
+- name: Tag initial photo processor Docker image with Git SHA
+  ansible.builtin.command:
+    cmd: "docker tag sashframe-photo-processor:latest sashframe-photo-processor:{{ local_git_sha_cmd.stdout[:8] }}"
+  become: true
+  become_user: "{{ sashframe_user }}"
+  when: not ansible_check_mode and app_image_check.rc != 0
+
+- name: Record initial deployed SHA state
+  ansible.builtin.copy:
+    content: "{{ local_git_sha_cmd.stdout }}\n"
+    dest: "{{ sashframe_data_root }}/state/deployed-sha"
+    owner: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    mode: "0644"
+  when: not ansible_check_mode and app_image_check.rc != 0
+
+# 6. Manage Service and Timer States & Enablement
 - name: Ensure sashframe-app.service is enabled and started
   ansible.builtin.systemd_service:
     name: sashframe-app.service
@@ -126,7 +184,7 @@
     enabled: true
   when: ansible_check_mode
 
-# 6. Verification and Health Checking
+# 7. Verification and Health Checking
 - name: Verify systemd units are installed
   ansible.builtin.stat:
     path: "{{ item.dest }}"

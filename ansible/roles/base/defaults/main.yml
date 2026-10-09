@@ -43,6 +43,15 @@ sashframe_config_directories:
     group: "{{ sashframe_group }}"
     mode: "0750"
 
+# Docker Official APT Repository Configuration
+sashframe_docker_apt_repo_url: "https://download.docker.com/linux/debian"
+sashframe_docker_gpg_key_url: "https://download.docker.com/linux/debian/gpg"
+sashframe_docker_keyring_path: "/etc/apt/keyrings/docker.asc"
+
+# Sashframe Application Repository
+sashframe_repo_url: "https://github.com/keiranjprice101/sashframe.git"
+sashframe_repo_version: "main"
+
 # Base System Packages required for Sashframe appliance
 sashframe_packages:
   - docker-ce
@@ -84,7 +93,7 @@ sashframe_photo_quality: 85
 sashframe_rclone_remote: "gdrive"
 sashframe_rclone_photo_path: ""
 sashframe_rclone_config: "/home/{{ sashframe_user }}/.config/rclone/rclone.conf"
-sashframe_rclone_shifter_remote: "gdrive"
+sashframe_rclone_shifter_remote: "gdrive-shifter"
 
 # Default Household Configuration (Fallback/Example)
 sashframe_household:

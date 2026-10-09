@@ -98,12 +98,48 @@
     shell: /bin/bash
 
 # 3. System Package Installation
+- name: Install APT prerequisite packages for Docker repository
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: "{{ sashframe_docker_keyring_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Docker official GPG key
+  ansible.builtin.get_url:
+    url: "{{ sashframe_docker_gpg_key_url }}"
+    dest: "{{ sashframe_docker_keyring_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Docker official APT repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: "{{ sashframe_docker_apt_repo_url }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: stable
+    architectures: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'armhf' if ansible_facts['architecture'] == 'armv7l' else 'amd64' }}"
+    signed_by: "{{ sashframe_docker_keyring_path }}"
+    state: present
+
 - name: Install required system packages
   ansible.builtin.apt:
     name: "{{ sashframe_packages }}"
     state: present
-    update_cache: true
-    cache_valid_time: 3600
+    update_cache: false
 
 # 4. Service State Management
 - name: Ensure core host services are enabled and running
@@ -195,7 +231,24 @@
     mode: "0640"
   no_log: true
 
-# 11. Household Configuration File Generation
+# 11. Google Drive Rclone Configuration
+- name: Ensure user rclone configuration directory exists
+  ansible.builtin.file:
+    path: "{{ sashframe_rclone_config | dirname }}"
+    state: directory
+    owner: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    mode: "0750"
+
+- name: Generate canonical rclone.conf configuration file
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ sashframe_rclone_config }}"
+    owner: "{{ sashframe_user }}"
+    group: "{{ sashframe_group }}"
+    mode: "0600"
+
+# 12. Household Configuration File Generation
 - name: Generate canonical household configuration file
   ansible.builtin.template:
     src: household.json.j2
@@ -204,7 +257,7 @@
     group: "{{ sashframe_group }}"
     mode: "0640"
 
-# 12. Central Environment Configuration File Generation
+# 13. Central Environment Configuration File Generation
 - name: Generate canonical sashframe.env configuration file
   ansible.builtin.template:
     src: sashframe.env.j2
@@ -213,7 +266,7 @@
     group: "{{ sashframe_group }}"
     mode: "0640"
 
-# 13. Verification of Installed Credentials & Configuration
+# 14. Verification of Installed Credentials & Configuration
 - name: Verify installed service-account file exists and has correct permissions
   ansible.builtin.stat:
     path: "{{ sashframe_google_service_account_dest }}"
@@ -227,6 +280,21 @@
       - installed_sa_stat.stat.mode == '0640'
     fail_msg: "Installed service-account credential validation failed."
     success_msg: "Installed service-account credential integrity verified."
+  when: not ansible_check_mode
+
+- name: Verify installed rclone.conf exists and has correct permissions
+  ansible.builtin.stat:
+    path: "{{ sashframe_rclone_config }}"
+  register: installed_rclone_stat
+
+- name: Assert installed rclone.conf integrity
+  ansible.builtin.assert:
+    that:
+      - installed_rclone_stat.stat.exists
+      - installed_rclone_stat.stat.isreg
+      - installed_rclone_stat.stat.mode == '0600'
+    fail_msg: "Installed rclone.conf validation failed."
+    success_msg: "Installed rclone.conf integrity verified."
   when: not ansible_check_mode
 
 - name: Verify installed sashframe.env exists and has correct permissions

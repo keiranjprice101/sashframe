@@ -1,0 +1,16 @@
+# ==============================================================================
+# Sashframe Google Drive Rclone Configuration
+# Managed by Ansible - do not edit directly
+# ==============================================================================
+
+[gdrive]
+type = drive
+scope = drive.readonly
+service_account_file = {{ sashframe_google_service_account_dest }}
+root_folder_id = {{ sashframe_photo_drive_folder_id }}
+
+[gdrive-shifter]
+type = drive
+scope = drive.readonly
+service_account_file = {{ sashframe_google_service_account_dest }}
+root_folder_id = {{ sashframe_shifter_drive_folder_id }}

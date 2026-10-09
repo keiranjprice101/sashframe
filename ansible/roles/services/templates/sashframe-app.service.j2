@@ -12,7 +12,7 @@ User={{ sashframe_user }}
 WorkingDirectory={{ sashframe_app_dir }}
 EnvironmentFile={{ sashframe_config_root }}/sashframe.env
 ExecStart=/bin/bash {{ sashframe_app_dir }}/scripts/start-app.sh
-TimeoutStartSec=120
+TimeoutStartSec=300
 StandardOutput=journal
 StandardError=journal
 
