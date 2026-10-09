@@ -67,6 +67,8 @@ fi
 
 # 4. Step 2: Deterministic batch photo processing
 echo "[Sync] Step 2/2: Executing batch photo reconciliation..."
+export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
+cd "$ROOT_DIR"
 if [ -f "$ROOT_DIR/.venv/bin/python3" ]; then
   "$ROOT_DIR/.venv/bin/python3" -m services.photos.process \
     --incoming "$PHOTO_INCOMING_DIR" \
@@ -78,7 +80,7 @@ elif command -v python3 >/dev/null 2>&1; then
     --processed "$PHOTO_PROCESSED_DIR" \
     --manifest "$PHOTO_MANIFEST"
 elif command -v docker >/dev/null 2>&1; then
-  (cd "$ROOT_DIR" && docker compose --env-file /etc/sashframe/sashframe.env run --rm sashframe-photo-processor)
+  docker compose --env-file /etc/sashframe/sashframe.env run --rm sashframe-photo-processor
 else
   echo "[Sync] Error: Neither Python 3 nor Docker found to execute photo processing." >&2
   exit 1
