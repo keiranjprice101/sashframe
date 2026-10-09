@@ -28,4 +28,4 @@ COPY docker/entrypoint-photos.sh ./docker/entrypoint-photos.sh
 RUN chmod +x ./docker/entrypoint-photos.sh
 
 ENTRYPOINT ["/app/docker/entrypoint-photos.sh"]
-CMD ["python3", "services/photos/processor.py"]
+CMD ["python3", "-m", "services.photos.process"]

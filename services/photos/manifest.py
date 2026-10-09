@@ -93,11 +93,18 @@ def reconcile_manifest(
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    seen_ids: set[str] = set()
+
     for file_path in incoming_files:
         meta = process_image(file_path, processed_dir, max_dimension=max_dimension, quality=quality)
         if meta is None:
             # Skip invalid or corrupt images without failing the whole batch
             continue
+
+        if meta["id"] in seen_ids:
+            logger.debug("Skipping duplicate content for '%s' (hash matches %s)", meta["sourceName"], meta["id"])
+            continue
+        seen_ids.add(meta["id"])
 
         source_name = meta["sourceName"]
         prev_entry = existing_by_source.get(source_name)

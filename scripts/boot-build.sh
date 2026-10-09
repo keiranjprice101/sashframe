@@ -63,7 +63,7 @@ fi
 # 2. Build Docker images from current code
 GIT_SHA="$(git rev-parse --short=8 HEAD 2>/dev/null || echo "latest")"
 log "Building Docker images tagged '${GIT_SHA}'..."
-IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build
+IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --profile tools build
 
 # 3. Start containers with the freshly built images
 log "Starting application containers with freshly built images..."

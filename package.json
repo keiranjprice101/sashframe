@@ -7,9 +7,9 @@
   },
   "scripts": {
     "setup": "bash scripts/install.sh --dev",
-    "dev": "bash scripts/dev.sh",
+    "dev": "astro dev",
     "dev:astro": "astro dev",
-    "dev:photos": "bash -c 'if [ -f .venv/bin/python3 ]; then .venv/bin/python3 services/photos/processor.py; else python3 services/photos/processor.py; fi'",
+    "photos:process": "bash -c 'if [ -f .venv/bin/python3 ]; then .venv/bin/python3 -m services.photos.process; elif command -v python3 >/dev/null 2>&1; then python3 -m services.photos.process; else docker compose run --rm sashframe-photo-processor; fi'",
     "build": "astro build",
     "preview": "node ./dist/server/entry.mjs",
     "prod:up": "docker compose --env-file /etc/sashframe/sashframe.env up -d",
@@ -22,7 +22,7 @@
     "kiosk:status": "bash scripts/start.sh --status",
     "daemon": "python3 daemon.py",
     "astro": "astro",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts && (if [ -f .venv/bin/python3 ]; then .venv/bin/python3 -m unittest discover tests; else python3 -m unittest discover tests; fi)"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.7",

@@ -3,6 +3,7 @@
   import type { Photo, PhotoManifestItem, Weather } from '../lib/types';
   import { formatDisplayDate, formatDayName, formatLiveTime } from '../lib/dates';
   import { fetchLocalWeather } from '../lib/weather';
+  import { ShuffleBag } from '../lib/shuffle';
 
   interface Props {
     photos?: Photo[];
@@ -20,77 +21,73 @@
   let activePhotos = $derived(manifestPhotos.length > 0 ? manifestPhotos : photos);
   let currentWeather = $state<Weather>(weather);
 
-  let currentIndex = $state(0);
+  let currentPhotoId = $state<string | undefined>(undefined);
   let now = $state(new Date());
+
+  const photoBag = new ShuffleBag<Photo>([], {
+    getId: (p) => p.id,
+  });
 
   let timer: ReturnType<typeof setInterval>;
   let clockTimer: ReturnType<typeof setInterval>;
-  let pollTimer: ReturnType<typeof setInterval>;
   let weatherTimer: ReturnType<typeof setInterval>;
 
-  function nextPhoto() {
-    if (activePhotos.length <= 1) {
-      currentIndex = 0;
-      return;
-    }
-    currentIndex = (currentIndex + 1) % activePhotos.length;
+  function updateBagAndSelect(items: Photo[]) {
+    photoBag.setItems(items);
+    const first = photoBag.next();
+    currentPhotoId = first ? first.id : undefined;
   }
 
-  async function checkPhotoManifest() {
+  function advancePhoto() {
+    if (activePhotos.length <= 1) {
+      currentPhotoId = activePhotos[0]?.id;
+      return;
+    }
+    const next = photoBag.next();
+    if (next) {
+      currentPhotoId = next.id;
+    }
+  }
+
+  async function loadPhotoManifestOnce() {
     try {
       const res = await fetch('/api/photos');
       if (!res.ok) return;
       const data: PhotoManifestItem[] = await res.json();
       
       if (Array.isArray(data) && data.length > 0) {
-        const currentFingerprint = manifestPhotos.map(p => `${p.id}:${p.url}`).join('|');
-        const newFingerprint = data.map(d => `${d.id}:${d.src}`).join('|');
-        
-        if (newFingerprint !== currentFingerprint) {
-          const currentPhotoId = activePhotos[currentIndex]?.id;
-          
-          manifestPhotos = data.map(item => ({
-            id: item.id,
-            url: item.src,
-            caption: item.sourceName,
-            sourceName: item.sourceName,
-            width: item.width,
-            height: item.height
-          }));
-
-          // Preserve currently viewed photo if still present, avoid resetting index
-          if (currentPhotoId) {
-            const foundIndex = manifestPhotos.findIndex(p => p.id === currentPhotoId);
-            if (foundIndex !== -1) {
-              currentIndex = foundIndex;
-            } else if (currentIndex >= manifestPhotos.length) {
-              currentIndex = 0;
-            }
-          } else {
-            currentIndex = 0;
-          }
-        }
-      } else if (manifestPhotos.length > 0) {
-        manifestPhotos = [];
-        if (currentIndex >= photos.length) {
-          currentIndex = 0;
-        }
+        manifestPhotos = data.map(item => ({
+          id: item.id,
+          url: item.src,
+          caption: item.sourceName,
+          sourceName: item.sourceName,
+          width: item.width,
+          height: item.height
+        }));
+        updateBagAndSelect(manifestPhotos);
+      } else if (photos.length > 0 && !currentPhotoId) {
+        updateBagAndSelect(photos);
       }
-    } catch (e) {
-      // Ignore network errors in local dev
+    } catch {
+      // Ignore network errors in local dev, fallback to initial photos
+      if (photos.length > 0 && !currentPhotoId) {
+        updateBagAndSelect(photos);
+      }
     }
   }
 
   onMount(() => {
-    // Initial fetch of manifest
-    checkPhotoManifest();
+    // Initialize bag with props.photos if present before manifest fetch
+    if (photos.length > 0) {
+      updateBagAndSelect(photos);
+    }
 
-    // Poll manifest every 5 seconds for development hot updates
-    pollTimer = setInterval(checkPhotoManifest, 5000);
+    // Load static manifest once upon mount (no continuous polling)
+    loadPhotoManifestOnce();
 
-    // Photo rotation timer
+    // Photo rotation timer (~60 seconds default)
     timer = setInterval(() => {
-      nextPhoto();
+      advancePhoto();
     }, rotationIntervalMs);
 
     // 1-second live clock timer
@@ -102,7 +99,7 @@
       try {
         const fresh = await fetchLocalWeather();
         currentWeather = fresh;
-      } catch (err) {
+      } catch {
         // Fallback to default or previous weather on network failure
       }
     }
@@ -117,7 +114,6 @@
   onDestroy(() => {
     if (timer) clearInterval(timer);
     if (clockTimer) clearInterval(clockTimer);
-    if (pollTimer) clearInterval(pollTimer);
     if (weatherTimer) clearInterval(weatherTimer);
   });
 </script>
@@ -125,10 +121,10 @@
 <!-- Photo Panel container (approx 40% width in kiosk layout) -->
 <div class="photo-panel">
   <!-- Render all photos stacked for crossfade transition -->
-  {#each activePhotos as photo, idx (photo.id)}
+  {#each activePhotos as photo (photo.id)}
     <div 
       class="photo-slide"
-      class:active={idx === currentIndex}
+      class:active={photo.id === currentPhotoId}
       style="background-image: url('{photo.url}');"
     ></div>
   {/each}

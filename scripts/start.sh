@@ -177,7 +177,7 @@ start_docker_stack() {
   # Build Docker images on startup if not already built during this boot session
   if [ ! -f "/run/sashframe-boot-built" ]; then
     echo "[Docker] Building Sashframe application images for tag '${GIT_SHA}'..."
-    IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" build
+    IMAGE_TAG="$GIT_SHA" "${COMPOSE_CMD[@]}" "${compose_env_args[@]}" --profile tools build
     touch "/run/sashframe-boot-built" 2>/dev/null || true
   fi
 

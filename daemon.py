@@ -58,7 +58,7 @@ DATA_DIR = REPO_ROOT / "data"
 PID_FILE = DATA_DIR / "daemon.pid"
 LOG_FILE = DATA_DIR / "daemon.log"
 INSTALL_SCRIPT = REPO_ROOT / "scripts" / "install.sh"
-PHOTO_PROCESSOR = REPO_ROOT / "services" / "photos" / "processor.py"
+PHOTO_PROCESSOR = REPO_ROOT / "services" / "photos" / "process.py"
 DIST_DIR = REPO_ROOT / "dist"
 DIST_INDEX = DIST_DIR / "index.html"
 MANIFEST_PATH = Path(os.environ.get("PHOTO_MANIFEST", DATA_DIR / "photos" / "manifest.json"))
@@ -112,11 +112,11 @@ def is_install_complete() -> tuple[bool, list[str]]:
         missing.append("Python virtual environment (.venv/bin/python3)")
     else:
         # Check required python packages inside venv
-        test_cmd = [str(VENV_PYTHON), "-c", "import watchdog, PIL"]
+        test_cmd = [str(VENV_PYTHON), "-c", "import PIL"]
         try:
             res = subprocess.run(test_cmd, capture_output=True, timeout=5)
             if res.returncode != 0:
-                missing.append("Python dependencies (watchdog, Pillow)")
+                missing.append("Python dependencies (Pillow)")
         except Exception:
             missing.append("Python dependencies probe failed")
 
@@ -363,11 +363,6 @@ class DaemonSupervisor:
         python_exec = str(VENV_PYTHON) if VENV_PYTHON.is_file() else sys.executable
 
         self.services = {
-            "Photos": ManagedSubprocess(
-                name="Photos",
-                cmd=[python_exec, str(PHOTO_PROCESSOR)],
-                cwd=REPO_ROOT,
-            ),
             "Astro": ManagedSubprocess(
                 name="Astro",
                 cmd=["npx", "astro", "preview", "--host", self.host, "--port", str(self.port), "--ignore-lock"],

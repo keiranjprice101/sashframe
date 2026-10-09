@@ -28,16 +28,15 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    depends_on:
-      - sashframe-photo-processor
 
   sashframe-photo-processor:
-    container_name: sashframe-photo-processor
     image: sashframe-photo-processor:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile.photos
-    restart: unless-stopped
+    restart: "no"
+    profiles:
+      - tools
     environment:
       - PYTHONUNBUFFERED=1
       - PUID=${PUID:-1000}
