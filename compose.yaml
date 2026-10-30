@@ -1,4 +1,14 @@
 services:
+  tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.tests
+    profiles:
+      - test
+    volumes:
+      - ./data/shifter/Unnamed.Shifter:/app/data/shifter/Unnamed.Shifter:ro
+    restart: "no"
+
   sashframe-app:
     container_name: sashframe-app
     image: sashframe-app:${IMAGE_TAG:-latest}
