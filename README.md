@@ -120,7 +120,33 @@ Individual dev tasks:
 - `npm run dev` — Start Astro dev server only
 - `npm run build` — Build production Astro SSR output
 - `npx astro check` — TypeScript typecheck across Astro & Svelte files
-- `npm test` — Run automated test suites (Shifter parser & ShuffleBag)
+- `npm test` — Run automated test suites (Shifter parser, ShuffleBag, and Python photo processing)
+
+#### Run tests with Docker
+
+With Docker Engine and the Compose plugin installed, run both the Node and Python test suites from the repository root:
+
+```bash
+docker compose run --rm --build tests
+```
+
+The test image installs Node 22, Python, and all test dependencies, so host Node and Python installations are not required. Tests run against a copy of the source inside the image. The Shifter integration tests require the local sample database at `data/shifter/Unnamed.Shifter` (not tracked in Git), mounted read-only. Photos and credentials are not mounted. The command exits with a nonzero status if either suite fails. Re-run it after changes to rebuild the source copy; dependency layers are cached.
+
+The `tests` service uses the `test` profile and runs only when explicitly requested, so normal `docker compose up` does not start it.
+
+Alternatively, run without Compose:
+
+```bash
+docker build -f docker/Dockerfile.tests -t sashframe-tests .
+docker run --rm -v "$(pwd)/data/shifter/Unnamed.Shifter:/app/data/shifter/Unnamed.Shifter:ro" sashframe-tests
+```
+
+With Podman, use the same Dockerfile without installing Docker or Compose:
+
+```bash
+podman build -f docker/Dockerfile.tests -t sashframe-tests .
+podman run --rm -v "$(pwd)/data/shifter/Unnamed.Shifter:/app/data/shifter/Unnamed.Shifter:ro" sashframe-tests
+```
 
 ---
 
