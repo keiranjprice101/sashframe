@@ -164,7 +164,7 @@ export function formatShiftTitle(rawText: string, shiftType: ShiftType): string 
  * Used by UI components to tint day cells and display shift badges.
  */
 export function getDayShiftType(events: CalendarEvent[], dateIso: string): ShiftType | undefined {
-  const dayEvents = events.filter(e => e.date === dateIso && e.source === 'shifter' && e.shiftType);
+  const dayEvents = events.filter(e => e.date === dateIso && (e.source === 'shifter' || e.source === 'google') && e.shiftType);
   if (dayEvents.length === 0) return undefined;
 
   // Check if a secondary shift was an explicit day off exception
@@ -205,6 +205,6 @@ export function getShiftAccentColor(shiftType?: ShiftType): string {
     case 'other':
       return 'var(--shift-other-color, #8C6E50)';
     default:
-      return 'var(--member-sasha, #2D7A4D)';
+      return 'var(--accent-walnut, #4A3A31)';
   }
 }

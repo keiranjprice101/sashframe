@@ -1,7 +1,8 @@
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import type { CalendarEvent } from '../src/lib/types.ts';
 import {
@@ -17,6 +18,53 @@ import {
   clearShifterCache
 } from '../src/lib/shifter.ts';
 import { GET as getCalendarApi } from '../src/pages/api/calendar.ts';
+
+// Build a reproducible database without relying on personal, untracked calendar data.
+let fixtureDirectory: string;
+let samplePath: string;
+const previousProvider = process.env.SASHFRAME_CALENDAR_PROVIDER;
+
+before(() => {
+  fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'sashframe-shifter-tests-'));
+  samplePath = path.join(fixtureDirectory, 'Unnamed.Shifter');
+  process.env.SASHFRAME_CALENDAR_PROVIDER = 'shifter';
+  const db = new DatabaseSync(samplePath);
+  try {
+    db.exec(`
+      CREATE TABLE tablaTurnos (_id INTEGER PRIMARY KEY, texto TEXT, abreviatura TEXT, horaInicio1 TEXT, horaFinal1 TEXT);
+      CREATE TABLE dias (fecha INTEGER PRIMARY KEY, turno1 INTEGER, turno2 INTEGER, notas TEXT);
+      INSERT INTO tablaTurnos VALUES
+        (1, 'day off', 'Off', '00:00', '00:00'),
+        (3, 'Nurse LD', 'LD', '21:00', '07:00'),
+        (4, 'nurse in charge', 'Charge', '07:00', '19:30'),
+        (6, 'Nurse N', 'Night', '19:30', '07:30'),
+        (7, 'dorrel', 'Dorrel', '00:00', '00:00');
+      BEGIN;
+    `);
+    const insert = db.prepare('INSERT INTO dias VALUES (?, ?, ?, ?)');
+    for (let offset = 0; offset < 1100; offset++) {
+      const day = new Date(Date.UTC(2020, 0, offset + 1));
+      const fecha = day.getUTCFullYear() * 10000 + day.getUTCMonth() * 100 + day.getUTCDate();
+      insert.run(fecha, offset % 2 === 0 ? 1 : 3, 0, '');
+    }
+    insert.run(20260903, 3, 0, '');
+    insert.run(20260907, 3, 0, 'Ohla preceptorship');
+    insert.run(20260908, 1, 0, '');
+    insert.run(20260914, 6, 0, '');
+    insert.run(20260917, 4, 7, 'LD');
+    insert.run(20260931, 1, 0, 'Halloween');
+    db.exec('COMMIT;');
+  } finally {
+    db.close();
+  }
+});
+
+after(() => {
+  clearShifterCache();
+  fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+  if (previousProvider === undefined) delete process.env.SASHFRAME_CALENDAR_PROVIDER;
+  else process.env.SASHFRAME_CALENDAR_PROVIDER = previousProvider;
+});
 
 test('1. parseShifterFecha: Correct zero-indexed month conversion and date validation', () => {
   // Test prompt example: 20261008 represents 8 November 2026 rather than 8 October 2026
@@ -86,7 +134,7 @@ test('2. classifyShift: Mapping LD, Day Off, Night, and Other shifts', () => {
 
 test('3. Handling unrecognised or missing shift definitions gracefully', () => {
   // Create an in-memory SQLite database to test edge cases
-  const tempDbPath = path.resolve('tests/temp_test.sqlite');
+  const tempDbPath = path.join(fixtureDirectory, 'temp_test.sqlite');
   if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
 
   const db = new DatabaseSync(tempDbPath);
@@ -131,7 +179,7 @@ test('3. Handling unrecognised or missing shift definitions gracefully', () => {
 });
 
 test('4. Handling dates without assigned shifts (empty shifts vs notes only)', () => {
-  const tempDbPath = path.resolve('tests/temp_empty_shifts.sqlite');
+  const tempDbPath = path.join(fixtureDirectory, 'temp_empty_shifts.sqlite');
   if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
 
   const db = new DatabaseSync(tempDbPath);
@@ -169,7 +217,6 @@ test('4. Handling dates without assigned shifts (empty shifts vs notes only)', (
 });
 
 test('5. Read-only safety: Ensuring the parser does not modify the SQLite file', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   assert.ok(fs.existsSync(samplePath), 'Sample database file must exist');
 
   const statBefore = fs.statSync(samplePath);
@@ -192,8 +239,7 @@ test('5. Read-only safety: Ensuring the parser does not modify the SQLite file',
   readOnlyDb.close();
 });
 
-test('6. Integration with actual sample database: validate known dates and shifts', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
+test('6. Integration with generated sample database: validate known dates and shifts', () => {
   assert.ok(fs.existsSync(samplePath));
 
   const events = parseShifterFile(samplePath);
@@ -253,7 +299,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260901-t1-1',
       title: 'Day Off',
-      memberId: 'sasha',
       date: '2026-10-01',
       isAllDay: true,
       source: 'shifter',
@@ -262,7 +307,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260902-t1-3',
       title: 'Nurse LD',
-      memberId: 'sasha',
       date: '2026-10-02',
       isAllDay: false,
       startTime: '07:00',
@@ -277,7 +321,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260902-t1-3',
       title: 'Nurse LD',
-      memberId: 'sasha',
       date: '2026-10-02',
       isAllDay: false,
       startTime: '07:00',
@@ -289,7 +332,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260903-t1-6',
       title: 'Nurse N',
-      memberId: 'sasha',
       date: '2026-10-03',
       isAllDay: false,
       startTime: '19:00',
@@ -322,7 +364,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
 });
 
 test('8. Determinism: Parsing the same database twice returns equivalent events', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   const run1 = parseShifterFile(samplePath);
   const run2 = parseShifterFile(samplePath);
 
@@ -331,7 +372,6 @@ test('8. Determinism: Parsing the same database twice returns equivalent events'
 });
 
 test('9. Process-state independence: Calling parser/loader repeatedly does not accumulate events', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   const initial = loadShifterEvents(samplePath);
   assert.ok(initial.length > 0, 'Initial load should produce events');
 
@@ -344,7 +384,6 @@ test('9. Process-state independence: Calling parser/loader repeatedly does not a
 });
 
 test('10. Stable IDs: Event IDs remain stable across parses', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   const events = parseShifterFile(samplePath);
 
   // Validate ID format stability
@@ -367,7 +406,6 @@ test('10. Stable IDs: Event IDs remain stable across parses', () => {
 });
 
 test('11. Duplicate handling: Multiple identical sources do not create duplicate events', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   const singleLoad = loadShifterEvents(samplePath);
 
   // Pass identical file twice in array
@@ -377,7 +415,7 @@ test('11. Duplicate handling: Multiple identical sources do not create duplicate
 });
 
 test('12. turno1 and turno2: Both shifts on the same day are handled correctly', () => {
-  const tempDbPath = path.resolve('tests/temp_two_shifts.sqlite');
+  const tempDbPath = path.join(fixtureDirectory, 'temp_two_shifts.sqlite');
   if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
 
   const db = new DatabaseSync(tempDbPath);
@@ -419,12 +457,12 @@ test('12. turno1 and turno2: Both shifts on the same day are handled correctly',
 
 test('13. Error handling: Missing file and non-database file handled gracefully', () => {
   // Non-existent file
-  const missingPath = path.resolve('tests/non_existent_calendar.Shifter');
+  const missingPath = path.join(fixtureDirectory, 'non_existent_calendar.Shifter');
   const missingEvents = loadShifterEvents(missingPath);
   assert.deepStrictEqual(missingEvents, [], 'Missing file must return empty array without throwing');
 
   // Corrupt / invalid non-sqlite file
-  const corruptPath = path.resolve('tests/temp_corrupt.Shifter');
+  const corruptPath = path.join(fixtureDirectory, 'temp_corrupt.Shifter');
   fs.writeFileSync(corruptPath, 'This is definitely not an SQLite database file!');
   try {
     const corruptEvents = parseShifterFile(corruptPath);
@@ -435,7 +473,6 @@ test('13. Error handling: Missing file and non-database file handled gracefully'
 });
 
 test('14. Restart-equivalent behaviour: Independent calls simulate container restart equivalence', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   
   // First "container session"
   const session1Events = loadShifterEvents(samplePath);
@@ -449,10 +486,10 @@ test('14. Restart-equivalent behaviour: Independent calls simulate container res
 
 test('15. sortEvents: sorts chronologically by date, start time, all-day first, and stable ID tie-breaker', () => {
   const unsorted: CalendarEvent[] = [
-    { id: 'b', title: 'Later', date: '2026-10-05', startTime: '12:00', memberId: 'sasha', isAllDay: false, source: 'shifter' },
-    { id: 'a', title: 'Earlier', date: '2026-10-05', startTime: '08:00', memberId: 'sasha', isAllDay: false, source: 'shifter' },
-    { id: 'all-day', title: 'All Day', date: '2026-10-05', memberId: 'sasha', isAllDay: true, source: 'shifter' },
-    { id: 'diff-day', title: 'Prev Day', date: '2026-10-04', memberId: 'sasha', isAllDay: true, source: 'shifter' }
+    { id: 'b', title: 'Later', date: '2026-10-05', startTime: '12:00', isAllDay: false, source: 'shifter' },
+    { id: 'a', title: 'Earlier', date: '2026-10-05', startTime: '08:00', isAllDay: false, source: 'shifter' },
+    { id: 'all-day', title: 'All Day', date: '2026-10-05', isAllDay: true, source: 'shifter' },
+    { id: 'diff-day', title: 'Prev Day', date: '2026-10-04', isAllDay: true, source: 'shifter' }
   ];
   const sorted = sortEvents(unsorted);
   assert.strictEqual(sorted[0].id, 'diff-day');
@@ -462,7 +499,6 @@ test('15. sortEvents: sorts chronologically by date, start time, all-day first, 
 });
 
 test('16. getShifterFingerprint: produces deterministic fingerprint and responds to changes', () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   const fp1 = getShifterFingerprint(samplePath);
   assert.ok(fp1 && fp1 !== 'empty', 'Fingerprint should not be empty for existing file');
   assert.ok(fp1.startsWith('Unnamed.Shifter_'), 'Fingerprint should contain filename');
@@ -476,7 +512,6 @@ test('16. getShifterFingerprint: produces deterministic fingerprint and responds
 
 test('17. In-memory caching: reuses parsed events and invalidates when file changes', () => {
   clearShifterCache();
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
 
   const first = parseShifterFile(samplePath);
   const second = parseShifterFile(samplePath);
@@ -484,7 +519,7 @@ test('17. In-memory caching: reuses parsed events and invalidates when file chan
   assert.deepStrictEqual(first, second);
 
   // Modifying mtime updates cache
-  const tempDbPath = path.resolve('tests/temp_cache_test.sqlite');
+  const tempDbPath = path.join(fixtureDirectory, 'temp_cache_test.sqlite');
   if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
 
   const db = new DatabaseSync(tempDbPath);
@@ -525,7 +560,6 @@ test('17. In-memory caching: reuses parsed events and invalidates when file chan
 });
 
 test('18. /api/calendar endpoint: supports ETag and 304 Not Modified', async () => {
-  const samplePath = path.resolve('data/shifter/Unnamed.Shifter');
   const prevEnv = process.env.SHIFTER_FILE_PATH;
   process.env.SHIFTER_FILE_PATH = samplePath;
 
@@ -562,3 +596,22 @@ test('18. /api/calendar endpoint: supports ETag and 304 Not Modified', async () 
   }
 });
 
+test('19. Provider parity: Google shifts use the existing day classification', () => {
+  const event: CalendarEvent = {
+    id: 'google-night', title: 'Nurse N', date: '2026-10-08',
+    isAllDay: false, startTime: '19:30', endTime: '07:30', source: 'google', shiftType: 'night'
+  };
+  assert.strictEqual(getDayShiftType([event], event.date), 'night');
+  assert.strictEqual(getDayShiftType([{ ...event, shiftType: undefined }], event.date), undefined);
+  assert.strictEqual(getDayShiftType([{ ...event, source: 'mock' }], event.date), undefined);
+  assert.strictEqual(getDayShiftType([event], '2026-10-09'), undefined);
+  assert.strictEqual(getShiftAccentColor(), 'var(--accent-walnut, #4A3A31)');
+});
+
+test('20. Shifter secondary day-off exception retains priority over primary long day', () => {
+  const events: CalendarEvent[] = [
+    { id: 'shifter-20260908-t1-3', title: 'Nurse LD', date: '2026-10-08', isAllDay: false, source: 'shifter', shiftType: 'ld' },
+    { id: 'shifter-20260908-t2-1', title: 'Day Off', date: '2026-10-08', isAllDay: true, source: 'shifter', shiftType: 'day_off' }
+  ];
+  assert.strictEqual(getDayShiftType(events, '2026-10-08'), 'day_off');
+});
