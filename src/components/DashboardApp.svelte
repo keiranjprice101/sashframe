@@ -6,26 +6,27 @@
 
   import type { CalendarEvent } from '../lib/types';
   import { getAutomaticTheme } from '../lib/sunSchedule';
-  import { HOUSEHOLD_MEMBERS, MOCK_PHOTOS, MOCK_WEATHER, getInitialMockEvents } from '../data/mock';
+  import { MOCK_PHOTOS, MOCK_WEATHER, getInitialMockEvents } from '../data/mock';
 
   interface Props {
-    initialShifterEvents?: CalendarEvent[];
+    initialCalendarEvents?: CalendarEvent[];
     initialCalendarEtag?: string;
+    allowDemoEvents?: boolean;
   }
 
-  let { initialShifterEvents = [], initialCalendarEtag = '' }: Props = $props();
+  let { initialCalendarEvents = [], initialCalendarEtag = '', allowDemoEvents = true }: Props = $props();
 
-  function resolveCalendarEvents(shifterList: CalendarEvent[]): CalendarEvent[] {
-    // If real Shifter events are loaded, display only real calendar data.
-    // Mock events serve purely as an initial placeholder when no Shifter file is present.
-    if (shifterList.length > 0) {
-      return shifterList;
+  function resolveCalendarEvents(calendarList: CalendarEvent[]): CalendarEvent[] {
+    // Display real provider data; Google calendars may legitimately be empty.
+    // Retain the existing Shifter demo placeholder when no file is present.
+    if (calendarList.length > 0 || !allowDemoEvents) {
+      return calendarList;
     }
     return getInitialMockEvents();
   }
 
   // svelte-ignore state_referenced_locally
-  let events = $state<CalendarEvent[]>(resolveCalendarEvents(initialShifterEvents));
+  let events = $state<CalendarEvent[]>(resolveCalendarEvents(initialCalendarEvents));
   let theme = $state<'light' | 'dark'>(getAutomaticTheme());
   let currentView = $state<'month' | 'week'>('week');
   let currentCalendarEtag = initialCalendarEtag;
@@ -42,7 +43,7 @@
       }
       const res = await fetch('/api/calendar', { headers });
       if (res.status === 304) {
-        // Shifter data has not changed on server; skip parsing and state update
+        // Calendar data has not changed on server; skip parsing and state update
         return;
       }
       if (!res.ok) return;
@@ -66,12 +67,12 @@
     theme = getAutomaticTheme(new Date());
     document.documentElement.setAttribute('data-theme', theme);
 
-    // If client mounted without initial shifter events, fetch immediately
-    if (initialShifterEvents.length === 0) {
+    // If client mounted without initial calendar events, fetch immediately
+    if (initialCalendarEvents.length === 0) {
       refreshCalendarEvents();
     }
 
-    // Periodically poll Shifter calendar endpoint every 2 minutes (host syncs every 5 mins)
+    // Periodically poll calendar endpoint every 2 minutes (host syncs every 5 mins)
     calendarTimer = setInterval(refreshCalendarEvents, 120000);
 
     // Periodically re-evaluate every 30 seconds for sunrise/sunset transitions
@@ -115,7 +116,6 @@
       >
         <CalendarMonth 
           {events}
-          members={HOUSEHOLD_MEMBERS}
         />
       </div>
 
@@ -127,7 +127,6 @@
       >
         <CalendarWeek 
           {events}
-          members={HOUSEHOLD_MEMBERS}
         />
       </div>
     </div>
