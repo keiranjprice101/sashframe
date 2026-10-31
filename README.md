@@ -151,6 +151,21 @@ podman build -f docker/Dockerfile.tests -t sashframe-tests .
 podman run --rm sashframe-tests
 ```
 
+With Ansible installed, run the host-free provisioning checks separately:
+
+```bash
+bash ansible/tests/run.sh
+```
+
+These check both providers, command-line overrides, generated configuration and units, invalid inputs, account permissions, deployment health gates, and rollback using fake Docker commands. Full provisioning idempotency and service switching should also be verified on a disposable Pi or VM.
+
+To smoke-test a built production image with synthetic calendars and no Google access (Linux host networking):
+
+```bash
+podman build -f docker/Dockerfile.app -t sashframe-app:google-calendar .
+python3 tests/smoke_calendar_container.py --image sashframe-app:google-calendar
+```
+
 ---
 
 ### 🤖 Host Provisioning & Configuration with Ansible
