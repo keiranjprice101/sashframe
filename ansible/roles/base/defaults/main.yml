@@ -81,8 +81,8 @@ sashframe_google_service_account_dest: "{{ sashframe_config_root }}/credentials/
 sashframe_env_backup_path: "{{ sashframe_config_root }}/sashframe.env.pre-ansible"
 
 # Container User/Group Mapping
-sashframe_puid: 1000
-sashframe_pgid: 1000
+sashframe_puid: "{{ sashframe_application_user.uid }}"
+sashframe_pgid: "{{ sashframe_application_user.group }}"
 
 # Photo Processing Defaults
 sashframe_photo_max_size: 1920

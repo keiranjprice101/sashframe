@@ -146,28 +146,16 @@
   register: built_images
   when: not ansible_check_mode and item.rc != 0
 
-- name: Tag selected Docker images as latest
-  ansible.builtin.command:
-    argv: [docker, tag, "{{ item.item }}:{{ local_git_sha_cmd.stdout[:8] }}", "{{ item.item }}:latest"]
-  loop: "{{ required_image_checks.results | default([]) }}"
-  when: not ansible_check_mode and item.rc != 0
-
-- name: Record provisioned SHA state
-  ansible.builtin.copy:
-    content: "{{ local_git_sha_cmd.stdout }}\n"
-    dest: "{{ sashframe_data_root }}/state/deployed-sha"
-    owner: "{{ sashframe_user }}"
-    group: "{{ sashframe_group }}"
-    mode: "0644"
-  register: deployed_sha_result
+# 6. Health-gated deployment preserves the previous known-good pointer on failure.
+- name: Deploy and verify selected application release
+  ansible.builtin.include_tasks: deploy-app.yml
   when: not ansible_check_mode
 
-# 6. Manage Service and Timer States & Enablement
 - name: Ensure sashframe-app.service is enabled and started
   ansible.builtin.systemd_service:
     name: sashframe-app.service
     enabled: true
-    state: "{{ 'restarted' if (sashframe_env_result.changed or deployed_sha_result.changed or built_images.changed) else 'started' }}"
+    state: started
   when: not ansible_check_mode
 
 - name: Ensure sashframe-app.service is enabled in check mode
@@ -180,7 +168,7 @@
   ansible.builtin.systemd_service:
     name: sashframe-kiosk.service
     enabled: true
-    state: started
+    state: "{{ 'restarted' if sashframe_deployment_required else 'started' }}"
   when: not ansible_check_mode
 
 - name: Ensure sashframe-kiosk.service is enabled in check mode

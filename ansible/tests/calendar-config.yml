@@ -22,6 +22,9 @@
         that:
           - sashframe_calendar_provider == expected_provider | default('shifter')
 
+    - name: Validate derived container ownership
+      ansible.builtin.import_tasks: ../roles/base/tasks/validate-ownership.yml
+
     - name: Validate selected provider inputs
       ansible.builtin.import_tasks: ../roles/base/tasks/validate-calendar.yml
 
@@ -48,6 +51,8 @@
           - compose_config.services['sashframe-calendar-sync'].volumes[1].read_only
           - not compose_config.services['sashframe-calendar-sync'].volumes[1].bind.create_host_path
           - sashframe_calendar_systemd_units | length == 2
+          - "'PUID=1001' in rendered_env"
+          - "'PGID=1002' in rendered_env"
           - "('Unit=' ~ sashframe_calendar_sync_name ~ '.service') in rendered_sync_timer"
           - "'OnUnitActiveSec=5m' in rendered_sync_timer"
           - "'sync-google-calendar.sh' in rendered_sync_service if sashframe_calendar_provider == 'google' else 'sync-shifter.sh' in rendered_sync_service"

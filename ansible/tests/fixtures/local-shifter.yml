@@ -1,2 +1,6 @@
 ---
 sashframe_calendar_provider: shifter
+# Simulated newly created appliance account, intentionally not UID/GID 1000.
+sashframe_application_user:
+  uid: 1001
+  group: 1002
