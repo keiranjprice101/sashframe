@@ -253,7 +253,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260901-t1-1',
       title: 'Day Off',
-      memberId: 'sasha',
       date: '2026-10-01',
       isAllDay: true,
       source: 'shifter',
@@ -262,7 +261,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260902-t1-3',
       title: 'Nurse LD',
-      memberId: 'sasha',
       date: '2026-10-02',
       isAllDay: false,
       startTime: '07:00',
@@ -277,7 +275,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260902-t1-3',
       title: 'Nurse LD',
-      memberId: 'sasha',
       date: '2026-10-02',
       isAllDay: false,
       startTime: '07:00',
@@ -289,7 +286,6 @@ test('7. Event pooling: adding new events into an existing pool preserves histor
     {
       id: 'shifter-20260903-t1-6',
       title: 'Nurse N',
-      memberId: 'sasha',
       date: '2026-10-03',
       isAllDay: false,
       startTime: '19:00',
@@ -449,10 +445,10 @@ test('14. Restart-equivalent behaviour: Independent calls simulate container res
 
 test('15. sortEvents: sorts chronologically by date, start time, all-day first, and stable ID tie-breaker', () => {
   const unsorted: CalendarEvent[] = [
-    { id: 'b', title: 'Later', date: '2026-10-05', startTime: '12:00', memberId: 'sasha', isAllDay: false, source: 'shifter' },
-    { id: 'a', title: 'Earlier', date: '2026-10-05', startTime: '08:00', memberId: 'sasha', isAllDay: false, source: 'shifter' },
-    { id: 'all-day', title: 'All Day', date: '2026-10-05', memberId: 'sasha', isAllDay: true, source: 'shifter' },
-    { id: 'diff-day', title: 'Prev Day', date: '2026-10-04', memberId: 'sasha', isAllDay: true, source: 'shifter' }
+    { id: 'b', title: 'Later', date: '2026-10-05', startTime: '12:00', isAllDay: false, source: 'shifter' },
+    { id: 'a', title: 'Earlier', date: '2026-10-05', startTime: '08:00', isAllDay: false, source: 'shifter' },
+    { id: 'all-day', title: 'All Day', date: '2026-10-05', isAllDay: true, source: 'shifter' },
+    { id: 'diff-day', title: 'Prev Day', date: '2026-10-04', isAllDay: true, source: 'shifter' }
   ];
   const sorted = sortEvents(unsorted);
   assert.strictEqual(sorted[0].id, 'diff-day');

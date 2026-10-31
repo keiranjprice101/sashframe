@@ -257,7 +257,6 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
         events.push({
           id: `shifter-${dia.fecha}-t1-${dia.turno1}`,
           title: title1,
-          memberId: 'sasha',
           date: dateIso,
           startTime: isTimed ? def1!.horaInicio1!.trim() : undefined,
           endTime: isTimed ? def1!.horaFinal1!.trim() : undefined,
@@ -281,7 +280,6 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
         events.push({
           id: `shifter-${dia.fecha}-t2-${dia.turno2}`,
           title: title2,
-          memberId: 'sasha',
           date: dateIso,
           startTime: isTimed2 ? def2!.horaInicio1!.trim() : undefined,
           endTime: isTimed2 ? def2!.horaFinal1!.trim() : undefined,
@@ -312,7 +310,6 @@ export function parseShifterFile(filePath: string): CalendarEvent[] {
           events.push({
             id: `shifter-${dia.fecha}-note-${idx}`,
             title: line,
-            memberId: 'sasha',
             date: dateIso,
             isAllDay: true,
             source: 'shifter',

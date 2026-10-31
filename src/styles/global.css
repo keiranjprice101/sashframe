@@ -23,11 +23,6 @@
   --accent-walnut-text: #FAF8F5;
   --accent-warm-highlight: #EAE3D7;
 
-  /* Household Member Colors */
-  --member-alex: #D96B52;
-  --member-sham: #3B7A66;
-  --member-sasha: #2D7A4D;
-
   /* Shifter Shift Canonical Colors (Light Mode) */
   --shift-ld-color: #2D7A4D;
   --shift-ld-bg: rgba(45, 122, 77, 0.08);
@@ -96,11 +91,6 @@ html[data-theme="dark"] {
   --accent-walnut-hover: #D4AB8A;
   --accent-walnut-text: #1A1614;
   --accent-warm-highlight: #332B25;
-
-  /* Household Member Colors (slightly lifted for dark-background contrast) */
-  --member-alex: #E27962;
-  --member-sham: #4E9B83;
-  --member-sasha: #4EAD77;
 
   /* Shifter Shift Canonical Colors (Dark Mode) */
   --shift-ld-color: #4EAD77;

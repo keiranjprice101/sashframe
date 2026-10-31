@@ -1,19 +1,8 @@
-export interface HouseholdMember {
-  id: string;
-  name: string;
-  color: string; // Primary hex color (e.g., #E26D5C)
-  bgColor: string; // Soft background color for cards (e.g., #FDF2F0)
-  borderColor: string;
-  textColor: string;
-  initials: string;
-}
-
 export type ShiftType = 'ld' | 'day_off' | 'night' | 'other';
 
 export interface CalendarEvent {
   id: string;
   title: string;
-  memberId: string;
   date: string; // YYYY-MM-DD
   startTime?: string; // HH:mm format (e.g., "09:30")
   endTime?: string; // HH:mm format (e.g., "11:00")

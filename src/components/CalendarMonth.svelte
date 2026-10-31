@@ -1,19 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import type { CalendarEvent, HouseholdMember } from '../lib/types';
+  import type { CalendarEvent } from '../lib/types';
   import { getMonthGrid } from '../lib/dates';
-  import { HOUSEHOLD_MEMBERS } from '../data/mock';
   import { getDayShiftType, getShiftAccentColor } from '../lib/shifter-utils';
 
   interface Props {
     events: CalendarEvent[];
-    members?: Record<string, HouseholdMember>;
   }
 
-  let { 
-    events, 
-    members = HOUSEHOLD_MEMBERS 
-  }: Props = $props();
+  let { events }: Props = $props();
 
   let now = $state(new Date());
   let timer: ReturnType<typeof setInterval>;
@@ -103,8 +98,7 @@
         <!-- Day Events List -->
         <div class="day-events">
           {#each visibleEvents as event (event.id)}
-            {@const member = members[event.memberId] || members.alex}
-            {@const accentColor = event.shiftType ? getShiftAccentColor(event.shiftType) : (event.color || `var(--member-${event.memberId}, ${member.color})`)}
+            {@const accentColor = getShiftAccentColor(event.shiftType)}
             <div 
               class="month-event"
               class:is-all-day={event.isAllDay}
