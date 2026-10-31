@@ -9,8 +9,11 @@ scope = drive.readonly
 service_account_file = {{ sashframe_google_service_account_dest }}
 root_folder_id = {{ sashframe_photo_drive_folder_id }}
 
+{% if sashframe_calendar_provider == 'shifter' %}
 [gdrive-shifter]
 type = drive
 scope = drive.readonly
 service_account_file = {{ sashframe_google_service_account_dest }}
 root_folder_id = {{ sashframe_shifter_drive_folder_id }}
+
+{% endif %}

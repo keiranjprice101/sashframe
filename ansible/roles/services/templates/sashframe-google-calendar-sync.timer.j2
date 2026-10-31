@@ -1,0 +1,11 @@
+[Unit]
+Description=Sashframe Google Calendar Sync Timer (Every 5 minutes)
+
+[Timer]
+OnBootSec=1m
+OnUnitActiveSec=5m
+Persistent=true
+Unit=sashframe-google-calendar-sync.service
+
+[Install]
+WantedBy=timers.target

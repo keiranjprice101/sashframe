@@ -1,0 +1,74 @@
+---
+# Host-free contract test. Run once for each provider using -e, for example:
+# ansible-playbook ansible/tests/calendar-config.yml -e sashframe_calendar_provider=google -e sashframe_google_calendar_id=fixture
+- name: Test provider configuration without changing an appliance
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Load base defaults
+      ansible.builtin.include_vars: ../roles/base/defaults/main.yml
+
+    - name: Load service defaults
+      ansible.builtin.include_vars: ../roles/services/defaults/main.yml
+
+    # Model local.yml choosing Shifter; command-line -e must override this.
+    - name: Load simulated local installation selection
+      ansible.builtin.include_vars: fixtures/local-shifter.yml
+
+    - name: Assert command-line selection overrides local selection
+      ansible.builtin.assert:
+        that:
+          - sashframe_calendar_provider == expected_provider | default('shifter')
+
+    - name: Validate selected provider inputs
+      ansible.builtin.import_tasks: ../roles/base/tasks/validate-calendar.yml
+
+    - name: Exercise provider-specific prompt conditions with supplied IDs
+      ansible.builtin.import_tasks: ../tasks/calendar-source.yml
+
+    - name: Render environment and rclone configuration in memory
+      ansible.builtin.set_fact:
+        rendered_env: "{{ lookup('template', '../roles/base/templates/sashframe.env.j2') }}"
+        rendered_rclone: "{{ lookup('template', '../roles/base/templates/rclone.conf.j2') }}"
+        rendered_sync_service: "{{ lookup('template', '../roles/services/templates/' ~ sashframe_calendar_sync_name ~ '.service.j2') }}"
+        rendered_sync_timer: "{{ lookup('template', '../roles/services/templates/' ~ sashframe_calendar_sync_name ~ '.timer.j2') }}"
+        compose_config: "{{ lookup('file', '../../compose.yaml') | from_yaml }}"
+
+    - name: Assert common configuration contracts
+      ansible.builtin.assert:
+        that:
+          - "('SASHFRAME_CALENDAR_PROVIDER=' ~ sashframe_calendar_provider) in rendered_env"
+          - "('GOOGLE_SERVICE_ACCOUNT_FILE=' ~ sashframe_google_service_account_dest) in rendered_env"
+          - "'SASHFRAME_HOUSEHOLD_CONFIG=' not in rendered_env"
+          - "'[gdrive]' in rendered_rclone"
+          - compose_config.services['sashframe-app'].volumes | select('search', 'credentials|secrets|google-drive') | list | length == 0
+          - compose_config.services['sashframe-calendar-sync'].profiles == ['calendar-google']
+          - compose_config.services['sashframe-calendar-sync'].volumes[1].read_only
+          - not compose_config.services['sashframe-calendar-sync'].volumes[1].bind.create_host_path
+          - sashframe_calendar_systemd_units | length == 2
+          - "('Unit=' ~ sashframe_calendar_sync_name ~ '.service') in rendered_sync_timer"
+          - "'OnUnitActiveSec=5m' in rendered_sync_timer"
+          - "'sync-google-calendar.sh' in rendered_sync_service if sashframe_calendar_provider == 'google' else 'sync-shifter.sh' in rendered_sync_service"
+
+    - name: Assert Google selection contracts
+      ansible.builtin.assert:
+        that:
+          - prompt_shifter_folder_id is skipped
+          - prompt_google_calendar_id is skipped
+          - "'[gdrive-shifter]' not in rendered_rclone"
+          - sashframe_calendar_sync_name == 'sashframe-google-calendar-sync'
+          - sashframe_inactive_calendar_sync_name == 'sashframe-shifter-sync'
+          - "'sashframe-calendar-sync' in sashframe_required_images"
+          - "('GOOGLE_CALENDAR_ID=' ~ sashframe_google_calendar_id) in rendered_env"
+      when: sashframe_calendar_provider == 'google'
+
+    - name: Assert Shifter selection contracts
+      ansible.builtin.assert:
+        that:
+          - "'[gdrive-shifter]' in rendered_rclone"
+          - sashframe_calendar_sync_name == 'sashframe-shifter-sync'
+          - sashframe_inactive_calendar_sync_name == 'sashframe-google-calendar-sync'
+          - "'sashframe-calendar-sync' not in sashframe_required_images"
+      when: sashframe_calendar_provider == 'shifter'

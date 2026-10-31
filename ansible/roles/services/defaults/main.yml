@@ -20,12 +20,18 @@ sashframe_systemd_units:
     dest: "{{ systemd_unit_dir }}/sashframe-kiosk.service"
   - template: "sashframe-photo-sync.service.j2"
     dest: "{{ systemd_unit_dir }}/sashframe-photo-sync.service"
-  - template: "sashframe-shifter-sync.service.j2"
-    dest: "{{ systemd_unit_dir }}/sashframe-shifter-sync.service"
-  - template: "sashframe-shifter-sync.timer.j2"
-    dest: "{{ systemd_unit_dir }}/sashframe-shifter-sync.timer"
   - template: "sashframe-updater.service.j2"
     dest: "{{ systemd_unit_dir }}/sashframe-updater.service"
+
+# Exactly one calendar sync pair is installed and enabled.
+sashframe_calendar_sync_name: "{{ 'sashframe-google-calendar-sync' if sashframe_calendar_provider == 'google' else 'sashframe-shifter-sync' }}"
+sashframe_inactive_calendar_sync_name: "{{ 'sashframe-shifter-sync' if sashframe_calendar_provider == 'google' else 'sashframe-google-calendar-sync' }}"
+sashframe_calendar_systemd_units:
+  - template: "{{ sashframe_calendar_sync_name }}.service.j2"
+    dest: "{{ systemd_unit_dir }}/{{ sashframe_calendar_sync_name }}.service"
+  - template: "{{ sashframe_calendar_sync_name }}.timer.j2"
+    dest: "{{ systemd_unit_dir }}/{{ sashframe_calendar_sync_name }}.timer"
+sashframe_required_images: "{{ ['sashframe-app', 'sashframe-photo-processor'] + (['sashframe-calendar-sync'] if sashframe_calendar_provider == 'google' else []) }}"
 
 # Legacy systemd units to clean up / ensure absent
 sashframe_legacy_units:

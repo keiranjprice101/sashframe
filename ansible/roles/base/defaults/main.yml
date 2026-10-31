@@ -78,7 +78,6 @@ sashframe_longitude: -0.902
 
 # Credential & Configuration Canonical Target Paths
 sashframe_google_service_account_dest: "{{ sashframe_config_root }}/credentials/google-drive.json"
-sashframe_household_config_dest: "{{ sashframe_config_root }}/household.json"
 sashframe_env_backup_path: "{{ sashframe_config_root }}/sashframe.env.pre-ansible"
 
 # Container User/Group Mapping
@@ -95,17 +94,9 @@ sashframe_rclone_photo_path: ""
 sashframe_rclone_config: "/home/{{ sashframe_user }}/.config/rclone/rclone.conf"
 sashframe_rclone_shifter_remote: "gdrive-shifter"
 
-# Default Household Configuration (Fallback/Example)
-sashframe_household:
-  - id: "sasha"
-    name: "Sasha"
-    color: "#2D7A4D"
-  - id: "sham"
-    name: "Sham"
-    color: "#3B7A66"
-  - id: "alex"
-    name: "Alex"
-    color: "#D96B52"
+# Calendar source selection (override with -e or local.yml)
+sashframe_calendar_provider: "shifter"
+sashframe_google_calendar_id: ""
 
 # Installation-Specific Variables (Supplied via local.yml or extra-vars)
 sashframe_photo_drive_folder_id: ""

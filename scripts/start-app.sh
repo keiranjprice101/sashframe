@@ -53,6 +53,14 @@ if [ -f "/etc/sashframe/sashframe.env" ]; then
   COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
 fi
 
+# Explicit build targets keep the optional Google worker out of Shifter installs.
+BUILD_SERVICES=(sashframe-app sashframe-photo-processor)
+case "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" in
+  google) BUILD_SERVICES+=(sashframe-calendar-sync) ;;
+  shifter) ;;
+  *) echo "Invalid SASHFRAME_CALENDAR_PROVIDER" >&2; exit 1 ;;
+esac
+
 # 1. Read deployed SHA from state file
 DEPLOYED_SHA=""
 if [ -f "$DEPLOYED_SHA_FILE" ]; then
@@ -97,9 +105,12 @@ if [ "$IMAGE_EXISTS" = false ]; then
       # Pristine initial install: no images exist yet. Build initial image.
       log "No existing Sashframe images found. Building initial image..."
       TARGET_TAG="${TARGET_TAG:-latest}"
-      IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --profile tools build
+      IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build "${BUILD_SERVICES[@]}"
       docker tag "sashframe-app:$TARGET_TAG" "sashframe-app:latest" 2>/dev/null || true
       docker tag "sashframe-photo-processor:$TARGET_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
+      if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ]; then
+        docker tag "sashframe-calendar-sync:$TARGET_TAG" "sashframe-calendar-sync:latest" 2>/dev/null || true
+      fi
     fi
   fi
 fi
@@ -117,20 +128,13 @@ check_health() {
   return 1
 }
 
-# 4. Check if container is already running and healthy with the target image
-IS_RUNNING=false
-if docker inspect --format '{{.State.Running}}' sashframe-app 2>/dev/null | grep -q "true"; then
-  IS_RUNNING=true
+# Ensure the selected worker exists when switching an existing installation.
+if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ] && ! docker image inspect "sashframe-calendar-sync:$TARGET_TAG" >/dev/null 2>&1; then
+  IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build sashframe-calendar-sync
 fi
 
-if [ "$IS_RUNNING" = true ]; then
-  # If already running, check if it responds to healthcheck
-  if curl -fsS "$APP_HEALTH_URL" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
-    log "Sashframe application is already running and healthy (${TARGET_TAG})."
-    exit 0
-  fi
-fi
-
+# Compose reconciles configuration even when the existing app is healthy.
+# This applies a provider change without rebuilding the app image.
 # 5. Start container with explicit IMAGE_TAG
 log "Starting Sashframe application container with image tag '${TARGET_TAG}'..."
 IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans sashframe-app
