@@ -39,6 +39,7 @@ data/daemon.pid
 
 # Shifter calendar data
 data/shifter/
+data/calendar/
 *.Shifter
 *.shifter
 

@@ -18,6 +18,10 @@ data/photos/incoming/*
 data/photos/processed/*
 !data/photos/processed/.gitkeep
 data/photos/manifest.json
+data/shifter
+data/calendar
+*.Shifter
+*.shifter
 
 # Secrets & configuration
 *.env

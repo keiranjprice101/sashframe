@@ -20,10 +20,11 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 │   ├── sashframe-kiosk.service       # Launches Chromium under Cage on tty1 on boot
 │   ├── sashframe-photo-sync.service  # Power-on Google Drive sync & batch photo ingestion
 │   ├── sashframe-updater.service     # Power-on one-shot software updater (no recurring timer)
-│   └── sashframe-shifter-sync.timer  # Syncs .Shifter calendar database from Google Drive every 5 min
+│   └── Calendar sync timer          # Shifter or Google Calendar, every 5 min
 ├── Docker Compose Application Services
 │   ├── sashframe-app                 # Production Node/Astro SSR web server (127.0.0.1:4321)
-│   └── sashframe-photo-processor     # One-shot batch WebP image pipeline (CLI utility)
+│   ├── sashframe-photo-processor     # One-shot batch WebP image pipeline (CLI utility)
+│   └── sashframe-calendar-sync       # One-shot Google Calendar worker (Google mode only)
 └── Host Persistent Storage (/var/lib/sashframe/)
     ├── photos/
     │   ├── incoming/                 # Synced by host rclone; source for photo processor
@@ -31,7 +32,8 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
     │   └── manifest.json             # Manifest read directly by Astro frontend
     ├── calendar/
     │   ├── incoming/                 # Staged .Shifter downloads from Google Drive
-    │   └── calendar.Shifter          # Active read-only SQLite database parsed by Astro
+    │   ├── calendar.Shifter          # Shifter mode: read-only SQLite database
+    │   └── google.json               # Google mode: last successful event snapshot
     ├── state/
     │   └── deployed-sha              # Active deployment Git SHA recorded by updater
     └── database/                     # Reserved for future local database
@@ -39,7 +41,7 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 
 ### Host OS Responsibilities
 - **Docker Engine & Compose**: Runs containerized application services.
-- **rclone & Google Drive OAuth**: Securely keeps user credentials in `~/.config/rclone/` on the host. Docker containers never have access to Google credentials or `/var/run/docker.sock`.
+- **Google credentials**: Ansible installs the service-account key at `/etc/sashframe/credentials/google-drive.json`. Host rclone uses it for Drive access. In Google Calendar mode, only the calendar worker receives this key through a read-only mount; the web app does not receive credentials.
 - **Systemd Timers & Boot Services**: Drives periodic background calendar sync (`sashframe-shifter-sync.timer`) and power-on boot operations (`sashframe-app.service`, `sashframe-kiosk.service`, `sashframe-photo-sync.service`, `sashframe-updater.service`).
 - **Display & Hardware**: Chromium/Cage fullscreen kiosk running locally against `http://127.0.0.1:4321`.
 - **Persistent Household Data**: All photos, manifests, and deployment states reside in `/var/lib/sashframe/`.
@@ -47,6 +49,7 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 ### Docker Responsibilities
 - **`sashframe-app`**: Production Astro standalone Node server running with `@astrojs/node` under `tini` as a non-root user (`node`). Exposes `GET /health` and binds to `127.0.0.1:4321`. Mounts `/var/lib/sashframe/photos` read-only (`:ro`).
 - **`sashframe-photo-processor`**: Python 3 batch image processing utility container (`Pillow`). Mounts `/var/lib/sashframe/photos` read-write (`:rw`) to validate images, apply EXIF orientation correction, resize without upscaling, convert to WebP, reconcile deleted sources, and atomically update `manifest.json`. Exits immediately upon completion.
+- **`sashframe-calendar-sync`**: In Google mode, reads one shared calendar using the existing service account and publishes a local snapshot. Astro reads this snapshot without contacting Google, including during offline startup.
 
 ---
 
@@ -75,7 +78,7 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 - **Schedule Entries (Non-Card Treatment)**:
   - Clean typographic schedule entries instead of rounded SaaS/Kanban cards or heavy shadows.
   - Event title as primary visual element, time secondary, and location tertiary.
-  - Thin 2.5px vertical accent bar color-coded by household member (**Alex** in terracotta coral, **Sham** in muted sage emerald).
+  - Thin 2.5px vertical accent bar using shift-type colours; ordinary events use a shared accent. Calendar member mappings and per-member colours have been removed.
 - **Non-Touch Presentation**:
   - All interactive buttons, chrome, and modal popups removed for a serene, print-like ambient aesthetic.
 
@@ -120,7 +123,7 @@ Individual dev tasks:
 - `npm run dev` — Start Astro dev server only
 - `npm run build` — Build production Astro SSR output
 - `npx astro check` — TypeScript typecheck across Astro & Svelte files
-- `npm test` — Run automated test suites (Shifter parser, ShuffleBag, and Python photo processing)
+- `npm test` — Run automated test suites for calendar providers, synchronization, ShuffleBag, and photo processing
 
 #### Run tests with Docker
 
@@ -130,7 +133,7 @@ With Docker Engine and the Compose plugin installed, run both the Node and Pytho
 docker compose run --rm --build tests
 ```
 
-The test image installs Node 22, Python, and all test dependencies, so host Node and Python installations are not required. Tests run against a copy of the source inside the image. The Shifter integration tests require the local sample database at `data/shifter/Unnamed.Shifter` (not tracked in Git), mounted read-only. Photos and credentials are not mounted. The command exits with a nonzero status if either suite fails. Re-run it after changes to rebuild the source copy; dependency layers are cached.
+The test image installs Node 22, Python, and all test dependencies, so host Node and Python installations are not required. Tests use synthetic databases and mocked Google responses, with no live calendars, photos, or credentials. The command exits with a nonzero status if either suite fails. Re-run it after changes to rebuild the source copy; dependency layers are cached.
 
 The `tests` service uses the `test` profile and runs only when explicitly requested, so normal `docker compose up` does not start it.
 
@@ -138,14 +141,14 @@ Alternatively, run without Compose:
 
 ```bash
 docker build -f docker/Dockerfile.tests -t sashframe-tests .
-docker run --rm -v "$(pwd)/data/shifter/Unnamed.Shifter:/app/data/shifter/Unnamed.Shifter:ro" sashframe-tests
+docker run --rm sashframe-tests
 ```
 
 With Podman, use the same Dockerfile without installing Docker or Compose:
 
 ```bash
 podman build -f docker/Dockerfile.tests -t sashframe-tests .
-podman run --rm -v "$(pwd)/data/shifter/Unnamed.Shifter:/app/data/shifter/Unnamed.Shifter:ro" sashframe-tests
+podman run --rm sashframe-tests
 ```
 
 ---
@@ -154,7 +157,7 @@ podman run --rm -v "$(pwd)/data/shifter/Unnamed.Shifter:/app/data/shifter/Unname
 
 Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS machine state (packages, application users/groups, Docker Engine, rclone, Cage, Chromium, and canonical directory structure) as well as installation-specific configuration and Google credential deployment.
 
-> **Authoritative Provisioning**: Ansible is the authoritative provisioning engine for the entire Sashframe appliance, managing base host packages, application users and groups, Docker, rclone, Cage, Chromium, filesystem paths, secure Google service account credentials, household configuration, environment files, invisible cursor theme, and all systemd services and timers.
+> **Authoritative Provisioning**: Ansible manages base host packages, application users and groups, Docker, rclone, Cage, Chromium, filesystem paths, Google service-account credentials, calendar provider configuration, environment files, invisible cursor theme, and all systemd services and timers.
 
 #### 1. Controller Requirements
 - Ansible Core 2.15+ (tested on Ansible 2.21+)
@@ -163,16 +166,18 @@ Ansible provides automated, idempotent provisioning for the base Raspberry Pi OS
 - `sshpass` *(optional — only required if using password authentication flags `-k` / `--ask-pass` instead of SSH keys)*
 
 #### 2. Google Service Account Setup (`sa.json`)
-Sashframe uses an authless, headless Google Service Account to download photos and the `.Shifter` calendar SQLite file from Google Drive via `rclone`:
+Sashframe uses a Google service account for unattended photo downloads and the selected calendar provider. The same account and JSON key can access both Drive and Calendar, with access granted separately to each folder/calendar:
 
 1. **Create Service Account**: In the [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the **Google Drive API**, and create a **Service Account** under *IAM & Admin* -> *Service Accounts*.
 2. **Generate JSON Key**: Under the service account's *Keys* tab, select *Add Key* -> *Create new key* -> *JSON*. Download the key (e.g. `sa.json`).
-3. **Share Google Drive Folders**: Open Google Drive in your browser, and share both your **Photos folder** and your **Shifter folder** with the service account's email address (e.g. `sashframe@your-project.iam.gserviceaccount.com`) with **Viewer** access.
+3. **Share Google Drive Folders**: Share your **Photos folder** with the service-account email (e.g. `sashframe@your-project.iam.gserviceaccount.com`) as **Viewer**. In Shifter mode, also share the **Shifter folder**.
 4. **Copy Folder IDs**: Copy the folder IDs from the Google Drive URLs:
    - `drive.google.com/drive/folders/<PHOTO_FOLDER_ID>`
    - `drive.google.com/drive/folders/<SHIFTER_FOLDER_ID>`
 
-> 🔒 **Security Notice**: Keep `sa.json` on your controller machine. Never commit service account keys to Git (`*.json` and `local.yml` are gitignored). Ansible will securely upload the key to `/etc/sashframe/credentials/google-drive.json` on the Pi with restricted `0640` permissions.
+For Google Calendar mode, also enable the **Google Calendar API** in the same project. In Calendar settings, share the selected calendar with the service-account email using **See all event details** (`reader`), then copy its **Calendar ID** from **Integrate calendar**. Use the explicit ID, not `primary`. The worker requests only `https://www.googleapis.com/auth/calendar.events.readonly`; no calendar editing, account impersonation, or domain-wide delegation is needed. Workspace policies may restrict sharing, and events marked private can expose only busy information at reader access. See [Calendar sharing](https://developers.google.com/workspace/calendar/api/concepts/sharing) and [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth).
+
+> 🔒 **Security Notice**: Keep `sa.json` outside the repository. Ansible uploads it to `/etc/sashframe/credentials/google-drive.json` with `0640` permissions. Do not commit keys; `local.yml` is gitignored, but arbitrary JSON filenames are not.
 
 #### 3. Inventory Setup
 Copy the example inventory to `ansible/inventory.yml` (this file is gitignored):
@@ -197,12 +202,17 @@ Copy `ansible/local.example.yml` to `ansible/local.yml` (this file is gitignored
 ```bash
 cp ansible/local.example.yml ansible/local.yml
 ```
-Edit `ansible/local.yml` and provide your Google Drive folder IDs, path to `sa.json`, and household details:
+Edit `ansible/local.yml` and provide the selected provider's settings and the path to `sa.json`:
 ```yaml
 ---
 # Google Drive Folder IDs
 sashframe_photo_drive_folder_id: "1H0hNW8VePrSPzkxyE_X3sAMYVzq8Z7TW"
 sashframe_shifter_drive_folder_id: "1eZESPK8aKkPMYrOFEyLAiBuCgS1QCDda"
+
+# One calendar provider (default: shifter)
+sashframe_calendar_provider: "shifter"
+# For Google instead, set provider to google and supply one calendar ID:
+# sashframe_google_calendar_id: "your-calendar-id@group.calendar.google.com"
 
 # Absolute path to the Google Service Account JSON file on this controller machine
 sashframe_google_service_account_src: "/path/to/sa.json"
@@ -212,20 +222,19 @@ sashframe_timezone: "Europe/London"
 sashframe_latitude: 51.453
 sashframe_longitude: -0.902
 
-# Household Members Configuration (color-coded accents)
-sashframe_household:
-  - id: "sasha"
-    name: "Sasha"
-    color: "#2D7A4D"
-  - id: "sham"
-    name: "Sham"
-    color: "#3B7A66"
-  - id: "alex"
-    name: "Alex"
-    color: "#D96B52"
 ```
 
-*Note*: If `sashframe_google_service_account_src` or folder IDs are omitted from `local.yml`, the playbook will interactively prompt for them when executed.
+*Note*: If the credential path, photo folder ID, or selected provider's calendar/folder ID is omitted, the playbook prompts for it.
+
+You can also select the provider with ordinary Ansible extra variables:
+
+```bash
+ansible-playbook -i ansible/inventory.yml ansible/site.yml \
+  -e sashframe_calendar_provider=google \
+  -e sashframe_google_calendar_id=your-calendar-id
+```
+
+Extra variables override `local.yml` for this run. The generated appliance configuration retains the selection until the next provisioning run; put it in `local.yml` or repeat the arguments on later runs. Google mode does not require a Shifter folder ID. Switching back to `shifter` requires its folder ID. Ansible disables the previous provider's sync timer and preserves its data. Photos continue using Drive in either mode. Old `sashframe_household` settings are obsolete and can be removed.
 
 #### 5. Test Connectivity (SSH Authentication)
 
@@ -292,8 +301,8 @@ What this does:
    - Provisions application user, groups (`docker`, `video`, `render`, `input`), packages, and directories (`/var/lib/sashframe`, `/etc/sashframe`).
    - Backs up existing `/etc/sashframe/sashframe.env` to `/etc/sashframe/sashframe.env.pre-ansible` on first migration.
    - Installs the Google service account credential to `/etc/sashframe/credentials/google-drive.json` with secure permissions (`0640` `root:sham`).
-   - Generates canonical `~/.config/rclone/rclone.conf` with `[gdrive]` and `[gdrive-shifter]` remotes.
-   - Generates deterministic `/etc/sashframe/household.json` (`0640` `root:sham`).
+   - Generates canonical `~/.config/rclone/rclone.conf` with the photo remote and, in Shifter mode, the Shifter remote.
+   - Removes the obsolete `/etc/sashframe/household.json` configuration.
    - Generates canonical `/etc/sashframe/sashframe.env` (`0640` `root:sham`) preserving all runtime keys.
    - Sets host timezone (`community.general.timezone`).
 2. **Services Role**:
@@ -306,7 +315,7 @@ What this does:
      - `sashframe-kiosk.service` (launches Cage + Chromium on `tty1` after app is healthy)
      - `sashframe-photo-sync.service` (boot-only Google Drive photo ingestion and batch processing)
      - `sashframe-updater.service` (boot-only power-on software auto-updater)
-     - `sashframe-shifter-sync.service` and `sashframe-shifter-sync.timer` (5-minute recurring calendar sync)
+     - The selected calendar provider's service and timer (5-minute recurring calendar sync)
    - Reloads systemd daemon and manages enablement/active states.
    - Verifies systemd unit file integrity, timer state, kiosk state, and HTTP `/health` (200 OK).
    - Automatically reboots the Raspberry Pi at the conclusion of provisioning to test the cold-boot lifecycle (photo ingestion, container startup, kiosk display) and verifies post-reboot `/health`. (Can be skipped via `-e sashframe_reboot_on_completion=false`).
@@ -330,7 +339,7 @@ Once provisioned by Ansible, the Raspberry Pi runs autonomously with systemd man
 2. **`sashframe-kiosk.service`**: Fullscreen kiosk display (`scripts/start.sh --kiosk-only`). Starts Cage (Wayland compositor) and Chromium on `tty1` as soon as the app container is healthy, ensuring the display is usable immediately without waiting for network or updates.
 3. **`sashframe-photo-sync.service`**: Power-on oneshot photo ingestion (`scripts/sync-photos.sh`). Synchronizes incoming photos from Google Drive via rclone and runs the batch reconciliation pipeline via one-shot container execution (`scripts/process-photos.sh`).
 4. **`sashframe-updater.service`**: Power-on oneshot software updater (`scripts/update.sh`). Checks GitHub `origin/main` opportunistically; builds and deploys candidates only if a new SHA is detected; verifies `/health` and automatically rolls back if unhealthy. (Power-on only; no recurring updater timers during normal uptime).
-5. **`sashframe-shifter-sync.timer`**: Recurring 5-minute timer triggering `sashframe-shifter-sync.service` (`scripts/sync-shifter.sh`) to synchronize `.Shifter` calendar SQLite databases from Google Drive.
+5. **Calendar synchronization**: Shifter mode uses `sashframe-shifter-sync.timer` and `scripts/sync-shifter.sh`. Google mode uses `sashframe-google-calendar-sync.timer` and `scripts/sync-google-calendar.sh`. Only the selected provider's timer runs.
 
 #### Runtime CLI Controls (`scripts/start.sh`)
 
@@ -472,6 +481,28 @@ Google Drive Shifter folder ID is configured declaratively in `ansible/local.yml
 
 ---
 
-## 📋 Roadmap
+## Google Calendar Synchronization
 
-- [ ] **Google Calendar Support**: Direct Google Calendar API synchronization as a first-class event source alongside or superseding manual `.Shifter` SQLite exports.
+Google mode displays one calendar using the same month/week views and shift palette as Shifter. Recognized shift titles such as `Nurse LD`, `Day Off`, and `Nurse N` use the existing shift categories; other appointments use the ordinary event treatment. There are no member assignments or per-member colours.
+
+The worker downloads expanded recurring occurrences from the start of the previous month through the end of the third month ahead, follows pagination, and atomically replaces `calendar/google.json` only after a successful download. Edits and cancellations are reflected by the next successful sync. Failed requests retain the last successful snapshot. The web app starts independently of synchronization and does not receive the service-account key. An empty Google calendar remains empty rather than showing demo events; Shifter's existing demo fallback is retained.
+
+For local development with Podman, first create a snapshot using the shared calendar ID and an absolute path to your existing key:
+
+```bash
+mkdir -p data/calendar
+podman build -f docker/Dockerfile.calendar -t sashframe-calendar-sync .
+podman run --rm --user "$(id -u):$(id -g)" \
+  -e GOOGLE_CALENDAR_ID=your-calendar-id \
+  -e GOOGLE_SERVICE_ACCOUNT_FILE=/run/secrets/google.json \
+  -v /absolute/path/to/sa.json:/run/secrets/google.json:ro \
+  -v "$(pwd)/data/calendar:/data/calendar:rw" \
+  sashframe-calendar-sync
+
+SASHFRAME_CALENDAR_PROVIDER=google GOOGLE_CALENDAR_ID=your-calendar-id \
+  npm run dev -- --background
+```
+
+The local app reads `data/calendar/google.json` by default. When using Compose locally in Google mode, set `SASHFRAME_CALENDAR_DIR=./data/calendar`; the default `./data/shifter` is retained for existing Shifter installations. Ansible uses `/var/lib/sashframe/calendar` for either provider. An installation configured for Google can also refresh manually with `bash scripts/sync-google-calendar.sh`.
+
+To verify a new installation, use a disposable shared calendar. Confirm an all-day event, timed shift, recurring event with one changed/cancelled occurrence, and an edit appear in both views after synchronization. Revoke access or disconnect networking and verify the last successful data remains visible after reboot. Then restore access and verify synchronization resumes. Check the selected systemd timer and journal for failures without logging event contents or keys.
