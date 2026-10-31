@@ -1,0 +1,10 @@
+---
+- name: Assert container UID and GID match the application account
+  ansible.builtin.assert:
+    that:
+      - sashframe_puid | string is match('^[0-9]+$')
+      - sashframe_pgid | string is match('^[0-9]+$')
+      - sashframe_puid | int == sashframe_application_user.uid | int
+      - sashframe_pgid | int == sashframe_application_user.group | int
+    fail_msg: "PUID/PGID overrides must match the Sashframe application's host UID and primary GID so cached data and shared credentials remain accessible."
+  when: sashframe_application_user.uid is defined

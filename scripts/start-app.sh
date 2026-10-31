@@ -53,10 +53,11 @@ if [ -f "/etc/sashframe/sashframe.env" ]; then
   COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
 fi
 
-# Explicit build targets keep the optional Google worker out of Shifter installs.
+# Pristine startup may build the app and photo processor. Provisioning and the
+# updater own optional worker builds, so Google synchronization cannot gate boot.
 BUILD_SERVICES=(sashframe-app sashframe-photo-processor)
 case "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" in
-  google) BUILD_SERVICES+=(sashframe-calendar-sync) ;;
+  google) ;;
   shifter) ;;
   *) echo "Invalid SASHFRAME_CALENDAR_PROVIDER" >&2; exit 1 ;;
 esac
@@ -108,9 +109,6 @@ if [ "$IMAGE_EXISTS" = false ]; then
       IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build "${BUILD_SERVICES[@]}"
       docker tag "sashframe-app:$TARGET_TAG" "sashframe-app:latest" 2>/dev/null || true
       docker tag "sashframe-photo-processor:$TARGET_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
-      if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ]; then
-        docker tag "sashframe-calendar-sync:$TARGET_TAG" "sashframe-calendar-sync:latest" 2>/dev/null || true
-      fi
     fi
   fi
 fi
@@ -130,7 +128,7 @@ check_health() {
 
 # Ensure the selected worker exists when switching an existing installation.
 if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ] && ! docker image inspect "sashframe-calendar-sync:$TARGET_TAG" >/dev/null 2>&1; then
-  IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build sashframe-calendar-sync
+  log "Warning: Google Calendar worker image is missing; provision or update it separately. Starting the cached app without synchronization."
 fi
 
 # Compose reconciles configuration even when the existing app is healthy.

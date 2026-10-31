@@ -90,6 +90,10 @@
     state: present
     create_home: true
     shell: /bin/bash
+  register: sashframe_application_user
+
+- name: Validate container ownership matches the appliance account
+  ansible.builtin.import_tasks: validate-ownership.yml
 
 # 3. System Package Installation
 - name: Install APT prerequisite packages for Docker repository

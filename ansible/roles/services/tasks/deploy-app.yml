@@ -1,0 +1,121 @@
+---
+- name: Inspect previous known-good pointer
+  ansible.builtin.stat:
+    path: "{{ sashframe_data_root }}/state/deployed-sha"
+  register: previous_deployed_pointer
+
+- name: Read previous known-good pointer
+  ansible.builtin.slurp:
+    src: "{{ sashframe_data_root }}/state/deployed-sha"
+  register: previous_deployed_contents
+  when: previous_deployed_pointer.stat.exists
+
+- name: Determine whether application reconciliation is required
+  ansible.builtin.set_fact:
+    previous_deployed_sha: "{{ previous_deployed_contents.content | default('') | b64decode | trim }}"
+    sashframe_deployment_required: "{{ sashframe_env_result.changed or built_images.changed or (previous_deployed_contents.content | default('') | b64decode | trim) != local_git_sha_cmd.stdout }}"
+
+- name: Launch candidate and promote only after application health succeeds
+  when: sashframe_deployment_required
+  block:
+    - name: Launch explicit candidate application image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --env-file
+          - "{{ sashframe_config_root }}/sashframe.env"
+          - up
+          - -d
+          - --remove-orphans
+          - sashframe-app
+        chdir: "{{ sashframe_app_dir }}"
+      environment:
+        IMAGE_TAG: "{{ local_git_sha_cmd.stdout[:8] }}"
+
+    - name: Verify candidate application health
+      ansible.builtin.uri:
+        url: "{{ sashframe_health_url }}"
+        status_code: 200
+        return_content: true
+      register: candidate_health
+      retries: "{{ sashframe_deployment_health_retries | default(5) }}"
+      delay: "{{ sashframe_deployment_health_delay | default(2) }}"
+      until:
+        - candidate_health.status == 200
+        - candidate_health.json.status | default('') == 'ok'
+
+    - name: Promote accepted image aliases
+      ansible.builtin.command:
+        argv: [docker, tag, "{{ item }}:{{ local_git_sha_cmd.stdout[:8] }}", "{{ item }}:latest"]
+      loop: "{{ sashframe_required_images }}"
+
+    - name: Record accepted deployed SHA
+      ansible.builtin.copy:
+        content: "{{ local_git_sha_cmd.stdout }}\n"
+        dest: "{{ sashframe_data_root }}/state/deployed-sha"
+        owner: "{{ sashframe_user }}"
+        group: "{{ sashframe_group }}"
+        mode: "0644"
+
+  rescue:
+    - name: Restore previous known-good pointer
+      ansible.builtin.copy:
+        content: "{{ previous_deployed_contents.content | b64decode }}"
+        dest: "{{ sashframe_data_root }}/state/deployed-sha"
+        owner: "{{ sashframe_user }}"
+        group: "{{ sashframe_group }}"
+        mode: "0644"
+      when: previous_deployed_pointer.stat.exists
+
+    - name: Remove unaccepted first-install pointer
+      ansible.builtin.file:
+        path: "{{ sashframe_data_root }}/state/deployed-sha"
+        state: absent
+      when: not previous_deployed_pointer.stat.exists
+
+    - name: Restore previous image aliases where available
+      ansible.builtin.command:
+        argv: [docker, tag, "{{ item }}:{{ previous_deployed_sha[:8] }}", "{{ item }}:latest"]
+      loop: "{{ sashframe_required_images }}"
+      failed_when: false
+      when: previous_deployed_sha | length > 0
+
+    - name: Restore previous application image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --env-file
+          - "{{ sashframe_config_root }}/sashframe.env"
+          - up
+          - -d
+          - --remove-orphans
+          - sashframe-app
+        chdir: "{{ sashframe_app_dir }}"
+      environment:
+        IMAGE_TAG: "{{ previous_deployed_sha[:8] }}"
+      when: previous_deployed_sha | length > 0
+
+    - name: Verify previous application health after rollback
+      ansible.builtin.uri:
+        url: "{{ sashframe_health_url }}"
+        status_code: 200
+        return_content: true
+      register: rollback_health
+      retries: "{{ sashframe_deployment_health_retries | default(5) }}"
+      delay: "{{ sashframe_deployment_health_delay | default(2) }}"
+      until:
+        - rollback_health.status == 200
+        - rollback_health.json.status | default('') == 'ok'
+      when: previous_deployed_sha | length > 0
+
+    - name: Stop unaccepted first-install application
+      ansible.builtin.command:
+        argv: [docker, compose, --env-file, "{{ sashframe_config_root }}/sashframe.env", stop, sashframe-app]
+        chdir: "{{ sashframe_app_dir }}"
+      when: previous_deployed_sha | length == 0
+
+    - name: Reject unsuccessful application deployment
+      ansible.builtin.fail:
+        msg: "Candidate application deployment failed; the previous known-good pointer and application image have been restored where available."
