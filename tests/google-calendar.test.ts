@@ -59,6 +59,17 @@ test('Ordinary appointments crossing midnight appear on both occupied days', () 
   ]);
 });
 
+test('Long events clip to the snapshot window; standalone expansion remains bounded', () => {
+  const raw = [
+    { id: 'long-all-day', summary: 'Long leave', start: { date: '2024-01-01' }, end: { date: '2030-01-01' } },
+    timed('long-timed', 'Project', '2024-01-01T12:00:00Z', '2030-01-01T12:00:00Z')
+  ];
+  const events = normalizeGoogleEvents(raw, 'Europe/London', { startDate: '2026-11-01', endDate: '2026-11-03' });
+  assert.equal(events.length, 4);
+  assert.ok(events.every(e => e.date === '2026-11-01' || e.date === '2026-11-02'));
+  assert.equal(normalizeGoogleEvents(raw).length, 732);
+});
+
 test('Cancelled recurring instances are removed and distinct occurrences remain distinct', () => {
   const events = normalizeGoogleEvents([
     timed('series_20261101', 'Meeting', '2026-11-01T10:00:00Z', '2026-11-01T11:00:00Z'),
@@ -126,6 +137,15 @@ test('Provider selection, cache isolation, last-good snapshots, and ETags use ex
     const empty = getCalendarSnapshot();
     assert.deepEqual(empty.events, []);
     assert.notEqual(empty.etag, loaded.etag);
+    fs.writeFileSync(cachePath, JSON.stringify({ ...snapshot,
+      timeMin: '2026-11-01T00:00:00Z', timeMax: '2026-11-03T00:00:00Z',
+      events: [{ id: 'long', start: { date: '2024-01-01' }, end: { date: '2030-01-01' } },
+        { id: 'outside', start: { date: '2024-01-01' }, end: { date: '2024-01-02' } }]
+    }));
+    const long = getCalendarSnapshot();
+    assert.deepEqual(long.events.map(e => e.date), ['2026-11-01', '2026-11-02']);
+    fs.writeFileSync(cachePath, '{invalid');
+    assert.deepEqual(getCalendarSnapshot(), long);
     process.env.GOOGLE_CALENDAR_ID = 'primary';
     assert.equal((await GET({ request: new Request('http://localhost/api/calendar') } as any)).status, 503);
   } finally {
