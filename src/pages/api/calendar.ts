@@ -1,10 +1,9 @@
 import type { APIRoute } from 'astro';
-import { loadShifterEvents, getShifterFingerprint } from '../../lib/shifter.ts';
+import { getCalendarSnapshot } from '../../lib/calendar.ts';
 
 export const GET: APIRoute = async ({ request }) => {
   try {
-    const fingerprint = getShifterFingerprint();
-    const etag = `"${fingerprint}"`;
+    const { events, etag } = getCalendarSnapshot();
     const ifNoneMatch = request.headers.get('if-none-match');
 
     if (ifNoneMatch && ifNoneMatch === etag) {
@@ -17,7 +16,6 @@ export const GET: APIRoute = async ({ request }) => {
       });
     }
 
-    const events = loadShifterEvents();
     return new Response(JSON.stringify(events), {
       status: 200,
       headers: {
@@ -28,7 +26,7 @@ export const GET: APIRoute = async ({ request }) => {
     });
   } catch {
     return new Response(JSON.stringify([]), {
-      status: 200,
+      status: 503,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache'
