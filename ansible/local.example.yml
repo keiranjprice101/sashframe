@@ -2,7 +2,12 @@
 # Sashframe Local Installation Variables (Template)
 # Copy this file to ansible/local.yml (which is gitignored) and customize for your appliance.
 
-# Google Drive Photo and Shifter Folder IDs
+# Calendar provider: shifter (default) or google; also accepted via -e
+sashframe_calendar_provider: "shifter"
+# Required only with provider google. Share this calendar with the service account.
+sashframe_google_calendar_id: ""
+
+# Google Drive Photo and Shifter Folder IDs (Shifter required only in shifter mode)
 sashframe_photo_drive_folder_id: "YOUR_GOOGLE_DRIVE_PHOTO_FOLDER_ID"
 sashframe_shifter_drive_folder_id: "YOUR_GOOGLE_DRIVE_SHIFTER_FOLDER_ID"
 
@@ -14,18 +19,6 @@ sashframe_google_service_account_src: "/path/to/google-service-account.json"
 sashframe_timezone: "Europe/London"
 sashframe_latitude: 51.453
 sashframe_longitude: -0.902
-
-# Household Members Configuration
-sashframe_household:
-  - id: "sasha"
-    name: "Sasha"
-    color: "#2D7A4D"
-  - id: "sham"
-    name: "Sham"
-    color: "#3B7A66"
-  - id: "alex"
-    name: "Alex"
-    color: "#D96B52"
 
 # Optional: Application Repository Path Override (defaults to /home/{{ sashframe_user }}/sashframe)
 # sashframe_app_dir: "/home/sham/sashframe"

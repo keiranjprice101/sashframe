@@ -1,0 +1,9 @@
+---
+- name: Validate calendar provider
+  ansible.builtin.assert:
+    that:
+      - sashframe_calendar_provider in ['shifter', 'google']
+      - sashframe_calendar_provider != 'shifter' or (sashframe_shifter_drive_folder_id is string and sashframe_shifter_drive_folder_id | trim | length > 0)
+      - sashframe_calendar_provider != 'google' or (sashframe_google_calendar_id is string and sashframe_google_calendar_id | trim | length > 0)
+    fail_msg: "Choose shifter with a Drive folder ID, or google with one Calendar ID."
+

@@ -82,6 +82,14 @@ check_health() {
   return 1
 }
 
+# Explicit build targets keep the optional Google worker out of Shifter installs.
+BUILD_SERVICES=(sashframe-app sashframe-photo-processor)
+case "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" in
+  google) BUILD_SERVICES+=(sashframe-calendar-sync) ;;
+  shifter) ;;
+  *) echo "Invalid SASHFRAME_CALENDAR_PROVIDER" >&2; exit 1 ;;
+esac
+
 # 1. Read currently deployed SHA
 CURRENT_SHA=""
 if [ -f "$DEPLOYED_SHA_FILE" ]; then
@@ -126,7 +134,7 @@ fi
 
 # 5. Build candidate Docker images while current app remains running
 log "Starting candidate image build for tag ${TARGET_TAG}..."
-if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --profile tools build; then
+if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build "${BUILD_SERVICES[@]}"; then
   log "Error: Candidate image build failed for ${TARGET_TAG}. Leaving current deployment ${CURRENT_TAG} running."
   if [ -n "$PREV_HEAD" ]; then
     git checkout -f "$PREV_HEAD" --quiet || true
@@ -134,10 +142,6 @@ if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" --prof
   exit 0
 fi
 log "Candidate image build succeeded for ${TARGET_TAG}."
-
-# Tag latest so one-shot utility executions resolve candidate build
-docker tag "sashframe-app:$TARGET_TAG" "sashframe-app:latest" 2>/dev/null || true
-docker tag "sashframe-photo-processor:$TARGET_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
 
 # 6. Deploy candidate application container
 log "Starting candidate deployment for tag ${TARGET_TAG}..."
@@ -159,6 +163,13 @@ sleep 2
 
 if check_health; then
   log "Healthcheck succeeded for candidate ${TARGET_TAG}. Candidate accepted as new known-good release."
+
+  # Publish latest aliases only after the candidate is accepted.
+  docker tag "sashframe-app:$TARGET_TAG" "sashframe-app:latest" 2>/dev/null || true
+  docker tag "sashframe-photo-processor:$TARGET_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
+  if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ]; then
+    docker tag "sashframe-calendar-sync:$TARGET_TAG" "sashframe-calendar-sync:latest" 2>/dev/null || true
+  fi
 
   # Atomically record new deployed SHA
   TEMP_SHA_FILE="$DEPLOYED_SHA_FILE.tmp.$$"
@@ -194,6 +205,9 @@ else
   if [ -n "$CURRENT_TAG" ]; then
     docker tag "sashframe-app:$CURRENT_TAG" "sashframe-app:latest" 2>/dev/null || true
     docker tag "sashframe-photo-processor:$CURRENT_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
+    if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ]; then
+      docker tag "sashframe-calendar-sync:$CURRENT_TAG" "sashframe-calendar-sync:latest" 2>/dev/null || true
+    fi
     IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans sashframe-app || true
 
     if check_health; then

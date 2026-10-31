@@ -219,7 +219,11 @@ print_status() {
   # 3. Systemd units status
   if command -v systemctl >/dev/null 2>&1; then
     echo "--- Systemd Services & Timers ---"
-    for unit in sashframe-app.service sashframe-kiosk.service sashframe-photo-sync.service sashframe-updater.service sashframe-shifter-sync.timer docker.service; do
+    local calendar_timer=sashframe-shifter-sync.timer
+    if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ]; then
+      calendar_timer=sashframe-google-calendar-sync.timer
+    fi
+    for unit in sashframe-app.service sashframe-kiosk.service sashframe-photo-sync.service sashframe-updater.service "$calendar_timer" docker.service; do
       if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
         local active_status enabled_status
         active_status="$(systemctl is-active "$unit" 2>/dev/null || echo "inactive")"

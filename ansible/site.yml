@@ -32,18 +32,8 @@
         sashframe_photo_drive_folder_id: "{{ prompt_photo_folder_id.user_input | trim }}"
       when: prompt_photo_folder_id is not skipped
 
-    - name: Prompt for Google Drive Shifter folder ID
-      ansible.builtin.pause:
-        prompt: "Enter Google Drive Shifter Folder ID"
-      register: prompt_shifter_folder_id
-      delegate_to: localhost
-      become: false
-      when: sashframe_shifter_drive_folder_id is not defined or sashframe_shifter_drive_folder_id == ''
-
-    - name: Set shifter folder ID from prompt
-      ansible.builtin.set_fact:
-        sashframe_shifter_drive_folder_id: "{{ prompt_shifter_folder_id.user_input | trim }}"
-      when: prompt_shifter_folder_id is not skipped
+    - name: Configure selected calendar source
+      ansible.builtin.import_tasks: tasks/calendar-source.yml
 
     - name: Prompt for path to Google service-account JSON on controller
       ansible.builtin.pause:

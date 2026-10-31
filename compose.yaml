@@ -5,8 +5,6 @@ services:
       dockerfile: docker/Dockerfile.tests
     profiles:
       - test
-    volumes:
-      - ./data/shifter/Unnamed.Shifter:/app/data/shifter/Unnamed.Shifter:ro
     restart: "no"
 
   sashframe-app:
@@ -27,6 +25,10 @@ services:
       - PGID=${PGID:-1000}
       - PHOTO_OUTPUT_DIR=/data/photos/processed
       - PHOTO_MANIFEST=/data/photos/manifest.json
+      - SASHFRAME_CALENDAR_PROVIDER=${SASHFRAME_CALENDAR_PROVIDER:-shifter}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID:-}
+      - GOOGLE_CALENDAR_CACHE=/data/calendar/google.json
+      - SASHFRAME_TIMEZONE=${SASHFRAME_TIMEZONE:-Europe/London}
       - SHIFTER_INPUT_DIR=/data/calendar
       - SHIFTER_FILE_PATH=/data/calendar/calendar.Shifter
     volumes:
@@ -58,3 +60,27 @@ services:
       - PHOTO_QUALITY=${PHOTO_QUALITY:-85}
     volumes:
       - ${SASHFRAME_PHOTOS_DIR:-./data/photos}:/data/photos:rw
+
+  sashframe-calendar-sync:
+    image: sashframe-calendar-sync:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.calendar
+    restart: "no"
+    profiles:
+      - calendar-google
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID:-}
+      - GOOGLE_CALENDAR_CACHE=/data/calendar/google.json
+      - GOOGLE_SERVICE_ACCOUNT_FILE=/run/secrets/google-service-account.json
+      - SASHFRAME_TIMEZONE=${SASHFRAME_TIMEZONE:-Europe/London}
+    volumes:
+      - ${SASHFRAME_CALENDAR_DIR:-./data/shifter}:/data/calendar:rw
+      - type: bind
+        source: ${GOOGLE_SERVICE_ACCOUNT_FILE:-/etc/sashframe/credentials/google-drive.json}
+        target: /run/secrets/google-service-account.json
+        read_only: true
+        bind:
+          create_host_path: false

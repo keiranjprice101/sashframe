@@ -1,0 +1,37 @@
+---
+- name: Validate calendar provider before prompting
+  ansible.builtin.assert:
+    that:
+      - sashframe_calendar_provider | default('shifter') in ['shifter', 'google']
+    fail_msg: "sashframe_calendar_provider must be shifter or google."
+
+- name: Prompt for Google Drive Shifter folder ID
+  ansible.builtin.pause:
+    prompt: "Enter Google Drive Shifter Folder ID"
+  register: prompt_shifter_folder_id
+  delegate_to: localhost
+  become: false
+  when:
+    - sashframe_calendar_provider | default('shifter') == 'shifter'
+    - sashframe_shifter_drive_folder_id is not defined or sashframe_shifter_drive_folder_id == ''
+
+- name: Set shifter folder ID from prompt
+  ansible.builtin.set_fact:
+    sashframe_shifter_drive_folder_id: "{{ prompt_shifter_folder_id.user_input | trim }}"
+  when: prompt_shifter_folder_id is not skipped
+
+- name: Prompt for Google Calendar ID
+  ansible.builtin.pause:
+    prompt: "Enter Google Calendar ID (share this calendar with the existing service account)"
+  register: prompt_google_calendar_id
+  delegate_to: localhost
+  become: false
+  when:
+    - sashframe_calendar_provider | default('shifter') == 'google'
+    - sashframe_google_calendar_id | default('') | length == 0
+
+- name: Set Google Calendar ID from prompt
+  ansible.builtin.set_fact:
+    sashframe_google_calendar_id: "{{ prompt_google_calendar_id.user_input | trim }}"
+  when: prompt_google_calendar_id is not skipped
+

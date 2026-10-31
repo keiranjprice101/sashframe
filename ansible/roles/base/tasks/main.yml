@@ -31,20 +31,14 @@
   ansible.builtin.assert:
     that:
       - sashframe_photo_drive_folder_id is string and sashframe_photo_drive_folder_id | length > 0
-      - sashframe_shifter_drive_folder_id is string and sashframe_shifter_drive_folder_id | length > 0
       - sashframe_timezone is string and sashframe_timezone | length > 0
       - sashframe_latitude is number and sashframe_latitude >= -90 and sashframe_latitude <= 90
       - sashframe_longitude is number and sashframe_longitude >= -180 and sashframe_longitude <= 180
-      - sashframe_household is iterable and sashframe_household | length > 0
     fail_msg: "Invalid or missing installation configuration variables. Please check local.yml or extra-vars."
     success_msg: "Installation configuration variables validated."
 
-- name: Validate household member uniqueness
-  ansible.builtin.assert:
-    that:
-      - (sashframe_household | map(attribute='id') | list | length) == (sashframe_household | map(attribute='id') | unique | list | length)
-    fail_msg: "Household member IDs must be non-empty and unique."
-    success_msg: "Household members validated."
+- name: Validate calendar source configuration
+  ansible.builtin.import_tasks: validate-calendar.yml
 
 - name: Check controller-side service-account file
   ansible.builtin.stat:
@@ -251,14 +245,11 @@
     group: "{{ sashframe_group }}"
     mode: "0600"
 
-# 12. Household Configuration File Generation
-- name: Generate canonical household configuration file
-  ansible.builtin.template:
-    src: household.json.j2
-    dest: "{{ sashframe_household_config_dest }}"
-    owner: root
-    group: "{{ sashframe_group }}"
-    mode: "0640"
+# Remove the obsolete household-member calendar configuration.
+- name: Remove deprecated household configuration
+  ansible.builtin.file:
+    path: "{{ sashframe_config_root }}/household.json"
+    state: absent
 
 # 13. Central Environment Configuration File Generation
 - name: Generate canonical sashframe.env configuration file
@@ -268,6 +259,8 @@
     owner: root
     group: "{{ sashframe_group }}"
     mode: "0640"
+
+  register: sashframe_env_result
 
 # 14. Verification of Installed Credentials & Configuration
 - name: Verify installed service-account file exists and has correct permissions

@@ -23,6 +23,12 @@ else
   echo "[Notice] Configuration file '$ENV_FILE' not found. Using defaults."
 fi
 
+# A provider switch may leave a previously queued timer invocation.
+if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" != shifter ]; then
+  echo "[Shifter] Calendar provider is not shifter; skipping."
+  exit 0
+fi
+
 # 2. Determine directories and targets
 CALENDAR_DIR="${SASHFRAME_CALENDAR_DIR:-/var/lib/sashframe/calendar}"
 if [ ! -d "$CALENDAR_DIR" ] && [ -d "$(dirname "${BASH_SOURCE[0]}")/../data/shifter" ]; then
