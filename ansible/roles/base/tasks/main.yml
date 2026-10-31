@@ -263,7 +263,8 @@
     owner: root
     group: "{{ sashframe_group }}"
     mode: "0640"
-
+  # A fresh-account dry run cannot know the numeric IDs until the account exists.
+  when: not ansible_check_mode or (sashframe_application_user.uid is defined and sashframe_application_user.group is defined)
   register: sashframe_env_result
 
 # 14. Verification of Installed Credentials & Configuration
