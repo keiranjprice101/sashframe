@@ -23,4 +23,6 @@ expect_invalid() {
 expect_invalid -e sashframe_calendar_provider=invalid -e expected_provider=invalid
 expect_invalid -e sashframe_calendar_provider=google -e expected_provider=google
 expect_invalid -e sashframe_calendar_provider=shifter
-printf 'Provider configuration tests passed (both providers and three invalid configurations).\n'
+expect_invalid -e sashframe_calendar_provider=google -e sashframe_google_calendar_id=primary -e expected_provider=google
+printf 'Provider configuration tests passed (both providers and four invalid configurations).\n'
+python3 ansible/tests/test_deployment.py
