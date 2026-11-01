@@ -26,8 +26,7 @@ StandardInput=tty
 StandardOutput=journal
 StandardError=journal
 ExecStart=/bin/bash {{ sashframe_app_dir }}/scripts/start.sh --kiosk-only
-# Only the root-owned console-reset helper runs privileged; Cage stays unprivileged.
-ExecStartPost=+/bin/bash /usr/local/libexec/sashframe-clear-kiosk-cursor.sh $MAINPID
+# Switching VTs here can break the Pi DRM swapchain and leave a black screen.
 Restart=always
 RestartSec=3s
 

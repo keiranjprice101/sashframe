@@ -43,6 +43,8 @@ if sys.argv[1:3] == ['image', 'inspect'] and '--format' in sys.argv:
     print('linux/arm64' if 'Architecture' in sys.argv[sys.argv.index('--format') + 1] else 'sha256:published')
 if sys.argv[1:3] == ['image', 'inspect'] and 'sashframe-calendar-sync:' in sys.argv[-1] and os.environ.get('WORKER_MISSING'):
     sys.exit(1)
+if 'run' in sys.argv and '--no-build' in sys.argv:
+    sys.exit('unknown flag: --no-build')
 if 'build' in sys.argv and os.environ.get('BUILD_FAILS'):
     sys.exit(1)
 """)
@@ -70,7 +72,19 @@ if 'build' in sys.argv and os.environ.get('BUILD_FAILS'):
         self.assertTrue(commands)
         command = commands[-1]
         self.assertEqual(command["image"], "abcdef12")
-        self.assertEqual(command["args"][-7:], ["run", "--no-build", "--pull", "never", "--rm", "--no-deps", "sashframe-calendar-sync"])
+        self.assertEqual(command["args"][-6:], ["run", "--pull", "never", "--rm", "--no-deps", "sashframe-calendar-sync"])
+
+    def test_photo_entrypoints_use_cached_deployed_worker(self):
+        self.env["SASHFRAME_PHOTOS_DIR"] = str(self.root / "photos")
+        self.env["RCLONE_REMOTE"] = ""
+        (self.root / "compose.yaml").touch()
+        for name in ("process-photos.sh", "sync-photos.sh"):
+            with self.subTest(script=name):
+                self.run_script(name)
+                command = self.commands()[-1]
+                self.assertEqual(command["image"], "abcdef12")
+                self.assertEqual(command["args"][-5:],
+                                 ["run", "--pull", "never", "--rm", "sashframe-photo-processor"])
 
     def test_google_sync_skips_when_shifter_selected(self):
         self.env["SASHFRAME_CALENDAR_PROVIDER"] = "shifter"
