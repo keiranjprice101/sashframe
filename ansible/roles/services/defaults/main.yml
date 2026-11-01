@@ -73,3 +73,7 @@ sashframe_cursor_symlinks:
 # Host Reboot on Initial Provisioning Completion
 sashframe_reboot_on_completion: true
 sashframe_reboot_timeout: 300
+
+# Allow boot photo ingestion (300s service timeout) to finish before checking kiosk.
+sashframe_kiosk_start_retries: 72
+sashframe_kiosk_start_delay: 5

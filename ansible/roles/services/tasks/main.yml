@@ -295,10 +295,14 @@
     - not ansible_check_mode
     - sashframe_reboot_on_completion | default(true) | bool
 
-- name: Verify kiosk service is active post-reboot
+# The HTTP app can be healthy while boot photo ingestion still holds the kiosk job.
+- name: Wait for kiosk service to become active after boot photo sync
   ansible.builtin.command: systemctl is-active sashframe-kiosk.service
   register: post_reboot_kiosk_status
   changed_when: false
+  retries: "{{ sashframe_kiosk_start_retries }}"
+  delay: "{{ sashframe_kiosk_start_delay }}"
+  until: post_reboot_kiosk_status.stdout == 'active'
   when:
     - not ansible_check_mode
     - sashframe_reboot_on_completion | default(true) | bool
