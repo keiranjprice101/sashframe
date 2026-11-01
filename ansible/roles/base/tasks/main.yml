@@ -96,7 +96,6 @@
 # Reset on reruns too, so a session from a failed first install is refreshed.
 - name: Refresh SSH session to apply application user group memberships
   ansible.builtin.meta: reset_connection
-  when: not ansible_check_mode
 
 - name: Validate container ownership matches the appliance account
   ansible.builtin.import_tasks: validate-ownership.yml
