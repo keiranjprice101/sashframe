@@ -48,5 +48,7 @@ ansible/inventory.yml
 ansible/inventory.yaml
 ansible/local.yml
 ansible/local.yaml
+ansible/local.yml.backup-*
+ansible/local.yaml.backup-*
 ansible/*.retry
 ansible/.vault-pass
