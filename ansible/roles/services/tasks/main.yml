@@ -96,6 +96,22 @@
   when: item.stat.exists
   notify: reload systemd daemon
 
+- name: Ensure system helper directory exists
+  ansible.builtin.file:
+    path: /usr/local/libexec
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install kiosk hardware cursor reset helper
+  ansible.builtin.copy:
+    src: clear-kiosk-cursor.sh
+    dest: /usr/local/libexec/sashframe-clear-kiosk-cursor.sh
+    owner: root
+    group: root
+    mode: "0755"
+
 # 4. Deploy Systemd Unit Templates
 - name: Deploy Sashframe systemd unit files
   ansible.builtin.template:
