@@ -18,7 +18,8 @@
   }: Props = $props();
 
   let manifestPhotos = $state<Photo[]>([]);
-  let activePhotos = $derived(manifestPhotos.length > 0 ? manifestPhotos : photos);
+  let manifestLoaded = $state(false);
+  let activePhotos = $derived(manifestLoaded ? manifestPhotos : photos);
   let currentWeather = $state<Weather>(weather);
 
   let currentPhotoId = $state<string | undefined>(undefined);
@@ -31,6 +32,9 @@
   let timer: ReturnType<typeof setInterval>;
   let clockTimer: ReturnType<typeof setInterval>;
   let weatherTimer: ReturnType<typeof setInterval>;
+  let manifestTimer: ReturnType<typeof setInterval>;
+  let manifestRequest: AbortController | undefined;
+  let manifestEtag: string | undefined;
 
   function updateBagAndSelect(items: Photo[]) {
     photoBag.setItems(items);
@@ -49,30 +53,42 @@
     }
   }
 
-  async function loadPhotoManifestOnce() {
+  async function refreshPhotoManifest() {
+    if (manifestRequest) return;
+    const controller = new AbortController();
+    manifestRequest = controller;
     try {
-      const res = await fetch('/api/photos');
+      const res = await fetch('/api/photos', {
+        headers: manifestEtag ? { 'If-None-Match': manifestEtag } : {},
+        cache: 'no-cache',
+        signal: controller.signal,
+      });
+      if (res.status === 304) return;
       if (!res.ok) return;
       const data: PhotoManifestItem[] = await res.json();
-      
-      if (Array.isArray(data) && data.length > 0) {
-        manifestPhotos = data.map(item => ({
+      if (controller.signal.aborted || !Array.isArray(data)) return;
+      manifestEtag = res.headers.get('ETag') ?? undefined;
+      const nextPhotos = data.map(item => ({
           id: item.id,
           url: item.src,
           caption: item.sourceName,
           sourceName: item.sourceName,
           width: item.width,
           height: item.height
-        }));
-        updateBagAndSelect(manifestPhotos);
-      } else if (photos.length > 0 && !currentPhotoId) {
-        updateBagAndSelect(photos);
+      }));
+      if (!manifestLoaded || JSON.stringify(nextPhotos) !== JSON.stringify(manifestPhotos)) {
+        manifestPhotos = nextPhotos;
+        manifestLoaded = true;
+        photoBag.setItems(nextPhotos);
+        // Preserve the displayed photo when it still exists; refreshes aren't rotations.
+        if (!nextPhotos.some(photo => photo.id === currentPhotoId)) {
+          currentPhotoId = photoBag.next()?.id;
+        }
       }
     } catch {
-      // Ignore network errors in local dev, fallback to initial photos
-      if (photos.length > 0 && !currentPhotoId) {
-        updateBagAndSelect(photos);
-      }
+      // Keep the current slideshow on transient network failures.
+    } finally {
+      manifestRequest = undefined;
     }
   }
 
@@ -82,8 +98,8 @@
       updateBagAndSelect(photos);
     }
 
-    // Load static manifest once upon mount (no continuous polling)
-    loadPhotoManifestOnce();
+    refreshPhotoManifest();
+    manifestTimer = setInterval(refreshPhotoManifest, 30000);
 
     // Photo rotation timer (~60 seconds default)
     timer = setInterval(() => {
@@ -115,6 +131,8 @@
     if (timer) clearInterval(timer);
     if (clockTimer) clearInterval(clockTimer);
     if (weatherTimer) clearInterval(weatherTimer);
+    if (manifestTimer) clearInterval(manifestTimer);
+    manifestRequest?.abort();
   });
 </script>
 

@@ -3,7 +3,7 @@ Description=Sashframe Power-On Photo Ingestion (Google Drive Sync & Batch Proces
 Documentation=https://github.com/keiranjprice101/sashframe
 Wants=network-online.target
 After=network-online.target
-Before=sashframe-kiosk.service
+# The frontend refreshes the manifest while ingestion runs in the background.
 
 [Service]
 Type=oneshot

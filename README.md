@@ -46,6 +46,8 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 - **Display & Hardware**: Chromium/Cage fullscreen kiosk running locally against `http://127.0.0.1:4321`.
 - **Persistent Household Data**: All photos, manifests, and deployment states reside in `/var/lib/sashframe/`.
 
+Photo ingestion runs in the background at boot. The kiosk displays cached photos immediately and refreshes its photo list every 30 seconds, picking up additions and removals without a restart. On a fresh installation the photo area stays empty until the first batch finishes.
+
 ### Docker Responsibilities
 - **`sashframe-app`**: Production Astro standalone Node server running with `@astrojs/node` under `tini` as a non-root user (`node`). Exposes `GET /health` and binds to `127.0.0.1:4321`. Mounts `/var/lib/sashframe/photos` read-only (`:ro`).
 - **`sashframe-photo-processor`**: Python 3 batch image processing utility container (`Pillow` and `pillow-heif`). Mounts `/var/lib/sashframe/photos` read-write (`:rw`) to validate images, apply EXIF orientation correction, resize without upscaling, convert to WebP, reconcile deleted sources, and atomically update `manifest.json`. Exits immediately upon completion.
