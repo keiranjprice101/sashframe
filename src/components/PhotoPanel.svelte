@@ -22,7 +22,13 @@
   let activePhotos = $derived(manifestLoaded ? manifestPhotos : photos);
   let currentWeather = $state<Weather>(weather);
 
-  let currentPhotoId = $state<string | undefined>(undefined);
+  let currentPhoto = $state<Photo | undefined>(undefined);
+  let previousPhoto = $state<Photo | undefined>(undefined);
+  let currentPhotoReady = $state(false);
+  let currentPhotoId = $derived(currentPhoto?.id);
+  let renderedPhotos = $derived(
+    previousPhoto ? [previousPhoto, ...(currentPhoto ? [currentPhoto] : [])] : currentPhoto ? [currentPhoto] : []
+  );
   let now = $state(new Date());
 
   const photoBag = new ShuffleBag<Photo>([], {
@@ -35,21 +41,38 @@
   let manifestTimer: ReturnType<typeof setInterval>;
   let manifestRequest: AbortController | undefined;
   let manifestEtag: string | undefined;
+  let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function selectPhoto(photo: Photo | undefined) {
+    if (photo?.id === currentPhoto?.id) return;
+    if (fadeTimer) clearTimeout(fadeTimer);
+    // Keep only the outgoing and incoming image, regardless of library size.
+    previousPhoto = photo ? (currentPhotoReady ? currentPhoto : previousPhoto) : undefined;
+    if (previousPhoto?.id === photo?.id) previousPhoto = undefined;
+    currentPhotoReady = false;
+    currentPhoto = photo;
+  }
+
+  function photoLoaded(id: string) {
+    if (id !== currentPhoto?.id || currentPhotoReady) return;
+    currentPhotoReady = true;
+    fadeTimer = setTimeout(() => { previousPhoto = undefined; }, 1250);
+  }
 
   function updateBagAndSelect(items: Photo[]) {
     photoBag.setItems(items);
     const first = photoBag.next();
-    currentPhotoId = first ? first.id : undefined;
+    selectPhoto(first);
   }
 
   function advancePhoto() {
     if (activePhotos.length <= 1) {
-      currentPhotoId = activePhotos[0]?.id;
+      selectPhoto(activePhotos[0]);
       return;
     }
     const next = photoBag.next();
     if (next) {
-      currentPhotoId = next.id;
+      selectPhoto(next);
     }
   }
 
@@ -82,7 +105,7 @@
         photoBag.setItems(nextPhotos);
         // Preserve the displayed photo when it still exists; refreshes aren't rotations.
         if (!nextPhotos.some(photo => photo.id === currentPhotoId)) {
-          currentPhotoId = photoBag.next()?.id;
+          selectPhoto(photoBag.next());
         }
       }
     } catch {
@@ -133,18 +156,24 @@
     if (weatherTimer) clearInterval(weatherTimer);
     if (manifestTimer) clearInterval(manifestTimer);
     manifestRequest?.abort();
+    if (fadeTimer) clearTimeout(fadeTimer);
   });
 </script>
 
-<!-- Photo Panel container (approx 40% width in kiosk layout) -->
+<!-- Photo Panel container (47% width in kiosk layout) -->
 <div class="photo-panel">
-  <!-- Render all photos stacked for crossfade transition -->
-  {#each activePhotos as photo (photo.id)}
-    <div 
+  <!-- Mount at most two images; release the outgoing one after its crossfade. -->
+  {#each renderedPhotos as photo (photo.id)}
+    <img
       class="photo-slide"
-      class:active={photo.id === currentPhotoId}
-      style="background-image: url('{photo.url}');"
-    ></div>
+      class:active={photo.id === currentPhotoId && currentPhotoReady}
+      class:outgoing={photo.id === previousPhoto?.id}
+      class:waiting={photo.id === previousPhoto?.id && !currentPhotoReady}
+      src={photo.url}
+      alt=""
+      decoding="async"
+      onload={() => photoLoaded(photo.id)}
+    />
   {/each}
 
   <!-- Dark gradient scrim for legibility -->
@@ -225,7 +254,7 @@
 <style>
   .photo-panel {
     position: relative;
-    width: 40%;
+    width: 47%;
     height: 100%;
     flex-shrink: 0;
     overflow: hidden;
@@ -235,17 +264,25 @@
   .photo-slide {
     position: absolute;
     inset: 0;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
     opacity: 0;
     transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-    will-change: opacity;
   }
 
   .photo-slide.active {
     opacity: 1;
     z-index: 1;
+  }
+
+  .photo-slide.outgoing {
+    z-index: 2;
+  }
+
+  .photo-slide.waiting {
+    opacity: 1;
   }
 
   .gradient-scrim {
@@ -365,7 +402,7 @@
 
   @media (max-width: 1366px) {
     .photo-panel {
-      width: 38%;
+      width: 45%;
     }
     .overlay-content {
       padding: 2rem 2.25rem;

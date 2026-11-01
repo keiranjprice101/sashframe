@@ -98,7 +98,7 @@
 </script>
 
 <div class="kiosk-dashboard">
-  <!-- Photo Panel (Left side, ~40% width) -->
+  <!-- Photo Panel (Left side, 47% width on larger screens) -->
   <PhotoPanel 
     photos={MOCK_PHOTOS} 
     weather={MOCK_WEATHER} 
