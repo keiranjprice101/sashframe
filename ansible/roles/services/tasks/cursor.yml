@@ -16,7 +16,7 @@
 
 - name: Install transparent cursor default file
   ansible.builtin.copy:
-    content: "{{ 'WGN1chAAAAABAAAAAQAAAAIA/f8gAAAAHAAAACQAAAACAP3/IAAAAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=' | b64decode }}"
+    src: transparent-cursor
     dest: "/usr/share/icons/sashframe-transparent/cursors/default"
     owner: root
     group: root
