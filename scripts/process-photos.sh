@@ -26,4 +26,4 @@ DEPLOYED_SHA="$(cat "$STATE_DIR/deployed-sha" 2>/dev/null || git -C "$ROOT_DIR" 
 export IMAGE_TAG="${IMAGE_TAG:-${DEPLOYED_SHA:0:8}}"
 
 cd "$ROOT_DIR"
-docker compose "${ENV_ARGS[@]}" run --rm sashframe-photo-processor
+docker compose "${ENV_ARGS[@]}" run --no-build --pull never --rm sashframe-photo-processor

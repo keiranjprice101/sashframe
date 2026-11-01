@@ -8,12 +8,12 @@
 # Flow:
 # 1. Fetch remote tracking branch (origin/main) with a bounded network timeout.
 # 2. Check if remote commit SHA differs from /var/lib/sashframe/state/deployed-sha.
-# 3. If no change: exit 0 immediately (no Docker build or restart).
+# 3. If no change: exit 0 immediately (no image pull or restart).
 # 4. If changed:
 #    - Checkout target commit source cleanly.
-#    - Build candidate Docker image(s) tagged with candidate Git SHA while the
+#    - Pull published ARM64 image(s) tagged with candidate Git SHA while the
 #      existing application remains running.
-#    - If candidate build fails: log error, leave current deployment running, exit.
+#    - If candidate pull fails: log error, leave current deployment running, exit.
 #    - Deploy candidate container with candidate IMAGE_TAG.
 #    - Poll GET /health endpoint for readiness within a bounded timeout.
 #    - On health success: atomically persist new deployed SHA, prune dangling
@@ -82,10 +82,10 @@ check_health() {
   return 1
 }
 
-# Explicit build targets keep the optional Google worker out of Shifter installs.
-BUILD_SERVICES=(sashframe-app sashframe-photo-processor)
+# Explicit image targets keep the optional Google worker out of Shifter installs.
+RELEASE_SERVICES=(sashframe-app sashframe-photo-processor)
 case "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" in
-  google) BUILD_SERVICES+=(sashframe-calendar-sync) ;;
+  google) RELEASE_SERVICES+=(sashframe-calendar-sync) ;;
   shifter) ;;
   *) echo "Invalid SASHFRAME_CALENDAR_PROVIDER" >&2; exit 1 ;;
 esac
@@ -132,26 +132,25 @@ if ! git checkout -f "$TARGET_SHA" --quiet; then
   exit 0
 fi
 
-# 5. Build candidate Docker images while current app remains running
-log "Starting candidate image build for tag ${TARGET_TAG}..."
-if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build "${BUILD_SERVICES[@]}"; then
-  log "Error: Candidate image build failed for ${TARGET_TAG}. Leaving current deployment ${CURRENT_TAG} running."
+# 5. Pull the published release while the accepted deployment remains running.
+log "Pulling published ARM64 images for ${TARGET_SHA}..."
+if ! SASHFRAME_IMAGE_REGISTRY="${SASHFRAME_IMAGE_REGISTRY:-ghcr.io/keiranjprice101}" bash scripts/pull-release.sh "$TARGET_SHA" "${RELEASE_SERVICES[@]}"; then
+  log "Published release unavailable; leaving the accepted deployment running. CI may still be publishing."
   if [ -n "$PREV_HEAD" ]; then
     git checkout -f "$PREV_HEAD" --quiet || true
   fi
   exit 0
 fi
-log "Candidate image build succeeded for ${TARGET_TAG}."
 
 # 6. Deploy candidate application container
 log "Starting candidate deployment for tag ${TARGET_TAG}..."
-if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans sashframe-app; then
+if ! IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --no-build --pull never --remove-orphans sashframe-app; then
   log "Error: Failed to launch candidate container for ${TARGET_TAG}. Initiating automatic rollback..."
   if [ -n "$PREV_HEAD" ]; then
     git checkout -f "$PREV_HEAD" --quiet || true
   fi
   if [ -n "$CURRENT_TAG" ]; then
-    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans sashframe-app || true
+    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --no-build --pull never --remove-orphans sashframe-app || true
   fi
   exit 1
 fi
@@ -208,7 +207,7 @@ else
     if [ "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" = google ]; then
       docker tag "sashframe-calendar-sync:$CURRENT_TAG" "sashframe-calendar-sync:latest" 2>/dev/null || true
     fi
-    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans sashframe-app || true
+    IMAGE_TAG="$CURRENT_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --no-build --pull never --remove-orphans sashframe-app || true
 
     if check_health; then
       log "Rollback to ${CURRENT_TAG} succeeded. Application is healthy."

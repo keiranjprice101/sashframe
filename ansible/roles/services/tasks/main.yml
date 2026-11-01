@@ -126,7 +126,7 @@
 - name: Flush handlers to reload systemd daemon if units changed
   ansible.builtin.meta: flush_handlers
 
-# 5. Build missing images for this checkout, including a newly selected worker.
+# 5. Pull tested ARM64 images; never build on the appliance.
 - name: Determine local Git commit SHA
   ansible.builtin.command:
     argv: [git, rev-parse, HEAD]
@@ -135,32 +135,17 @@
   changed_when: false
   when: not ansible_check_mode
 
-- name: Check required Docker images for the selected provider
+- name: Pull published ARM64 images for the checkout Git SHA
   ansible.builtin.command:
-    argv: [docker, image, inspect, "{{ item }}:{{ local_git_sha_cmd.stdout[:8] }}"]
-  loop: "{{ sashframe_required_images }}"
-  register: required_image_checks
-  failed_when: false
-  changed_when: false
-  when: not ansible_check_mode
-
-- name: Build missing Sashframe images with the checkout Git SHA
-  ansible.builtin.command:
-    argv:
-      - docker
-      - compose
-      - --env-file
-      - "{{ sashframe_config_root }}/sashframe.env"
-      - build
-      - "{{ item.item }}"
+    argv: "{{ ['bash', 'scripts/pull-release.sh', local_git_sha_cmd.stdout] + sashframe_required_images }}"
     chdir: "{{ sashframe_app_dir }}"
   environment:
-    IMAGE_TAG: "{{ local_git_sha_cmd.stdout[:8] }}"
+    SASHFRAME_IMAGE_REGISTRY: "{{ sashframe_image_registry }}"
   become: true
   become_user: "{{ sashframe_user }}"
-  loop: "{{ required_image_checks.results | default([]) }}"
-  register: built_images
-  when: not ansible_check_mode and item.rc != 0
+  register: prepared_images
+  changed_when: "'Prepared image:' in prepared_images.stdout"
+  when: not ansible_check_mode
 
 # 6. Health-gated deployment preserves the previous known-good pointer on failure.
 - name: Deploy and verify selected application release

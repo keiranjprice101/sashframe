@@ -326,7 +326,7 @@ What this does:
    - Clones the Sashframe application repository to `/home/sham/sashframe`.
    - Cleans up legacy systemd units (`sashframe-boot-build.service`, `sashframe-photo-sync.timer`, `sashframe-updater.timer`).
    - Configures the invisible cursor theme (`sashframe-transparent`) for Cage and Chromium kiosk display.
-   - Builds initial Docker images and records initial deployed Git SHA.
+   - Pulls tested ARM64 images from GHCR for the checkout SHA and records the accepted deployed Git SHA.
    - Templatizes and deploys canonical systemd units:
      - `sashframe-app.service` (oneshot known-good container launch and health gate)
      - `sashframe-kiosk.service` (launches Cage + Chromium on `tty1` after app is healthy)
@@ -336,6 +336,8 @@ What this does:
    - Reloads systemd daemon and manages enablement/active states.
    - Verifies systemd unit file integrity, timer state, kiosk state, and HTTP `/health` (200 OK).
    - Automatically reboots the Raspberry Pi at the conclusion of provisioning to test the cold-boot lifecycle (photo ingestion, container startup, kiosk display) and verifies post-reboot `/health`. (Can be skipped via `-e sashframe_reboot_on_completion=false`).
+
+Before provisioning a new commit, wait for its **Publish ARM64 images** GitHub Actions run to finish successfully. The Pi needs outbound HTTPS access to `ghcr.io` and its image storage endpoints. Images are public, so no Docker login is needed. Keep existing `local.yml`, inventory, Google credentials, and calendar sharing settings. Source SHA and image tags must match; the registry tags use `sha-<full Git SHA>`. The playbook pulls images and creates the existing eight-character local aliases for compatibility with cached startup and worker scripts. Development builds remain available through Compose.
 
 #### 8. Verify Idempotency
 Run the playbook a second time to ensure zero unintended changes:
@@ -355,7 +357,7 @@ Once provisioned by Ansible, the Raspberry Pi runs autonomously with systemd man
 1. **`sashframe-app.service`**: Power-on oneshot container starter (`scripts/start-app.sh`). Reads the last-known-good release SHA from `/var/lib/sashframe/state/deployed-sha`, verifies the Docker image, launches the container with Docker Compose, and gates progress on HTTP `GET /health` (200 OK).
 2. **`sashframe-kiosk.service`**: Fullscreen kiosk display (`scripts/start.sh --kiosk-only`). Starts Cage (Wayland compositor) and Chromium on `tty1` as soon as the app container is healthy, ensuring the display is usable immediately without waiting for network or updates.
 3. **`sashframe-photo-sync.service`**: Power-on oneshot photo ingestion (`scripts/sync-photos.sh`). Synchronizes incoming photos from Google Drive via rclone and runs the batch reconciliation pipeline via one-shot container execution (`scripts/process-photos.sh`).
-4. **`sashframe-updater.service`**: Power-on oneshot software updater (`scripts/update.sh`). Checks GitHub `origin/main` opportunistically; builds and deploys candidates only if a new SHA is detected; verifies `/health` and automatically rolls back if unhealthy. (Power-on only; no recurring updater timers during normal uptime).
+4. **`sashframe-updater.service`**: Power-on oneshot software updater (`scripts/update.sh`). Checks GitHub `origin/main` opportunistically; pulls and deploys published ARM64 candidates only if a new SHA is detected; verifies `/health` and automatically rolls back if unhealthy. (Power-on only; no recurring updater timers during normal uptime).
 5. **Calendar synchronization**: Shifter mode uses `sashframe-shifter-sync.timer` and `scripts/sync-shifter.sh`. Google mode uses `sashframe-google-calendar-sync.timer` and `scripts/sync-google-calendar.sh`. Only the selected provider's timer runs.
 
 #### Runtime CLI Controls (`scripts/start.sh`)
@@ -406,8 +408,8 @@ Sashframe executes software updates exclusively on system power-on via `sashfram
 1. **Known-Good App First**: The existing deployed release boots immediately, independent of network or Git availability.
 2. **One-Shot Boot Check**: Performs a single opportunistic Git fetch against `origin/main` (with a 25-second bounded network timeout).
 3. **Network Resilient**: If network/DNS fails or times out, the updater logs clearly and exits cleanly without affecting the running application or kiosk.
-4. **Commit Comparison**: Compares the remote SHA against `/var/lib/sashframe/state/deployed-sha`. If identical, exits immediately with zero build overhead.
-5. **Candidate Build Isolation**: When a new SHA exists, builds candidate Docker images (`sashframe-app:<candidate-sha>`) while the known-good application remains running and serving the display.
+4. **Commit Comparison**: Compares the remote SHA against `/var/lib/sashframe/state/deployed-sha`. If identical, exits immediately with no image download or restart.
+5. **Candidate Pull Isolation**: Downloads SHA-tagged ARM64 images from GHCR while the known-good application remains running. If CI has not finished publishing all required images, leaves the current release running and restores the previous checkout. Production startup and workers never build images automatically.
 6. **Health Probe Verification**: Starts candidate release and polls `GET /health` (`http://127.0.0.1:4321/health`).
 7. **Automated Rollback**: If the candidate fails health checks, the updater immediately stops the candidate, restores the previous known-good image, and verifies health.
 8. **Atomic Release State**: `/var/lib/sashframe/state/deployed-sha` is updated atomically only after health succeeds.

@@ -67,7 +67,7 @@ elif 'stop' in args:
                  "vars": {"sashframe_data_root": str(self.root), "sashframe_config_root": str(self.root),
                           "sashframe_app_dir": str(REPOSITORY), "sashframe_health_url": f"http://127.0.0.1:{self.server.server_port}/health",
                           "sashframe_user": getpass.getuser(), "sashframe_group": grp.getgrgid(os.getgid()).gr_name,
-                          "sashframe_env_result": {"changed": False}, "built_images": {"changed": False},
+                          "sashframe_env_result": {"changed": False}, "prepared_images": {"changed": False},
                           "sashframe_required_images": ["sashframe-app", "sashframe-calendar-sync"],
                           "local_git_sha_cmd": {"stdout": candidate}, "sashframe_deployment_health_retries": 1,
                           "sashframe_deployment_health_delay": 0}, "tasks": [task, task, {"ansible.builtin.assert": {"that": ["not sashframe_deployment_required"]}}] if repeat else [task]}]

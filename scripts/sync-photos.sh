@@ -75,7 +75,7 @@ if command -v docker >/dev/null 2>&1 && { [ -f "/etc/sashframe/sashframe.env" ] 
   if [ -f "/etc/sashframe/sashframe.env" ]; then
     COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
   fi
-  (cd "$ROOT_DIR" && docker compose "${COMPOSE_ENV_ARGS[@]}" run --rm sashframe-photo-processor)
+  (cd "$ROOT_DIR" && docker compose "${COMPOSE_ENV_ARGS[@]}" run --no-build --pull never --rm sashframe-photo-processor)
 elif [ -f "$ROOT_DIR/.venv/bin/python3" ]; then
   export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
   cd "$ROOT_DIR"

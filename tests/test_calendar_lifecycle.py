@@ -35,6 +35,12 @@ with open(os.environ['COMMAND_LOG'], 'a') as output:
     output.write(json.dumps({'args': sys.argv[1:], 'image': os.environ.get('IMAGE_TAG')}) + '\\n')
 if sys.argv[1:3] == ['inspect', '--format']:
     print('true')
+if sys.argv[1:3] == ['image', 'inspect'] and os.environ.get('PULL_FAIL') and 'ghcr.io/' in sys.argv[-1]:
+    sys.exit(1)
+if sys.argv[1] == 'pull' and os.environ.get('PULL_FAIL'):
+    sys.exit(1)
+if sys.argv[1:3] == ['image', 'inspect'] and '--format' in sys.argv:
+    print('linux/arm64' if 'Architecture' in sys.argv[sys.argv.index('--format') + 1] else 'sha256:published')
 if sys.argv[1:3] == ['image', 'inspect'] and 'sashframe-calendar-sync:' in sys.argv[-1] and os.environ.get('WORKER_MISSING'):
     sys.exit(1)
 if 'build' in sys.argv and os.environ.get('BUILD_FAILS'):
@@ -51,6 +57,7 @@ if 'build' in sys.argv and os.environ.get('BUILD_FAILS'):
         source = Path(__file__).resolve().parents[1] / "scripts" / name
         target = self.root / "scripts" / name
         shutil.copyfile(source, target)
+        shutil.copyfile(source.parent / "pull-release.sh", self.root / "scripts/pull-release.sh")
         return subprocess.run(["bash", str(target)], env=self.env, text=True,
                               capture_output=True, timeout=10, check=True)
 
@@ -63,7 +70,7 @@ if 'build' in sys.argv and os.environ.get('BUILD_FAILS'):
         self.assertTrue(commands)
         command = commands[-1]
         self.assertEqual(command["image"], "abcdef12")
-        self.assertEqual(command["args"][-4:], ["run", "--rm", "--no-deps", "sashframe-calendar-sync"])
+        self.assertEqual(command["args"][-7:], ["run", "--no-build", "--pull", "never", "--rm", "--no-deps", "sashframe-calendar-sync"])
 
     def test_google_sync_skips_when_shifter_selected(self):
         self.env["SASHFRAME_CALENDAR_PROVIDER"] = "shifter"
@@ -95,6 +102,29 @@ if 'build' in sys.argv and os.environ.get('BUILD_FAILS'):
         self.run_script("start-app.sh")
         self.assertFalse(any("build" in command["args"] for command in self.commands()))
         self.assertTrue(any("up" in command["args"] for command in self.commands()))
+
+    def configure_update(self):
+        self.executable("git", """#!/bin/sh
+if [ "$1" = rev-parse ]; then
+ case "$2" in origin/main) printf '%s\\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; *) printf '%s\\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;; esac
+fi
+""")
+
+    def test_updater_pulls_and_never_builds(self):
+        self.configure_update()
+        self.run_script("update.sh")
+        commands = self.commands()
+        self.assertFalse(any("build" in c["args"] for c in commands))
+        self.assertTrue(any("ghcr.io/" in " ".join(c["args"]) for c in commands))
+        self.assertTrue(any("up" in c["args"] and "--no-build" in c["args"] for c in commands))
+        self.assertEqual((self.root / "state/deployed-sha").read_text().strip(), "b" * 40)
+
+    def test_unpublished_release_keeps_accepted_deployment(self):
+        self.configure_update()
+        self.env["PULL_FAIL"] = "1"
+        self.run_script("update.sh")
+        self.assertFalse(any("up" in c["args"] or "build" in c["args"] for c in self.commands()))
+        self.assertEqual((self.root / "state/deployed-sha").read_text().strip(), "abcdef1234567890")
 
 
 if __name__ == "__main__":

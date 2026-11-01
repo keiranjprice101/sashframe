@@ -53,15 +53,6 @@ if [ -f "/etc/sashframe/sashframe.env" ]; then
   COMPOSE_ENV_ARGS=(--env-file "/etc/sashframe/sashframe.env")
 fi
 
-# Pristine startup may build the app and photo processor. Provisioning and the
-# updater own optional worker builds, so Google synchronization cannot gate boot.
-BUILD_SERVICES=(sashframe-app sashframe-photo-processor)
-case "${SASHFRAME_CALENDAR_PROVIDER:-shifter}" in
-  google) ;;
-  shifter) ;;
-  *) echo "Invalid SASHFRAME_CALENDAR_PROVIDER" >&2; exit 1 ;;
-esac
-
 # 1. Read deployed SHA from state file
 DEPLOYED_SHA=""
 if [ -f "$DEPLOYED_SHA_FILE" ]; then
@@ -103,12 +94,8 @@ if [ "$IMAGE_EXISTS" = false ]; then
       log "Using existing image 'sashframe-app:${ANY_TAG}' as fallback."
       TARGET_TAG="$ANY_TAG"
     else
-      # Pristine initial install: no images exist yet. Build initial image.
-      log "No existing Sashframe images found. Building initial image..."
-      TARGET_TAG="${TARGET_TAG:-latest}"
-      IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" build "${BUILD_SERVICES[@]}"
-      docker tag "sashframe-app:$TARGET_TAG" "sashframe-app:latest" 2>/dev/null || true
-      docker tag "sashframe-photo-processor:$TARGET_TAG" "sashframe-photo-processor:latest" 2>/dev/null || true
+      log "No cached application image available. Run the Ansible playbook with network access to pull a published release."
+      exit 1
     fi
   fi
 fi
@@ -135,7 +122,7 @@ fi
 # This applies a provider change without rebuilding the app image.
 # 5. Start container with explicit IMAGE_TAG
 log "Starting Sashframe application container with image tag '${TARGET_TAG}'..."
-IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --remove-orphans sashframe-app
+IMAGE_TAG="$TARGET_TAG" "${COMPOSE_CMD[@]}" "${COMPOSE_ENV_ARGS[@]}" up -d --no-build --pull never --remove-orphans sashframe-app
 
 # 6. Wait for health endpoint
 log "Verifying application readiness at ${APP_HEALTH_URL} (timeout ${HEALTH_TIMEOUT_SECS}s)..."

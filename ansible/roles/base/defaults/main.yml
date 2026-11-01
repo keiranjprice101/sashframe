@@ -51,6 +51,7 @@ sashframe_docker_keyring_path: "/etc/apt/keyrings/docker.asc"
 # Sashframe Application Repository
 sashframe_repo_url: "https://github.com/keiranjprice101/sashframe.git"
 sashframe_repo_version: "main"
+sashframe_image_registry: "ghcr.io/keiranjprice101"
 
 # Base System Packages required for Sashframe appliance
 sashframe_packages:

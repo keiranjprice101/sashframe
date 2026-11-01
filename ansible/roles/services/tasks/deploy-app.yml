@@ -13,7 +13,7 @@
 - name: Determine whether application reconciliation is required
   ansible.builtin.set_fact:
     previous_deployed_sha: "{{ previous_deployed_contents.content | default('') | b64decode | trim }}"
-    sashframe_deployment_required: "{{ sashframe_env_result.changed or built_images.changed or (previous_deployed_contents.content | default('') | b64decode | trim) != local_git_sha_cmd.stdout }}"
+    sashframe_deployment_required: "{{ sashframe_env_result.changed or prepared_images.changed or (previous_deployed_contents.content | default('') | b64decode | trim) != local_git_sha_cmd.stdout }}"
 
 - name: Launch candidate and promote only after application health succeeds
   when: sashframe_deployment_required
@@ -27,6 +27,9 @@
           - "{{ sashframe_config_root }}/sashframe.env"
           - up
           - -d
+          - --no-build
+          - --pull
+          - never
           - --remove-orphans
           - sashframe-app
         chdir: "{{ sashframe_app_dir }}"
@@ -90,6 +93,9 @@
           - "{{ sashframe_config_root }}/sashframe.env"
           - up
           - -d
+          - --no-build
+          - --pull
+          - never
           - --remove-orphans
           - sashframe-app
         chdir: "{{ sashframe_app_dir }}"
