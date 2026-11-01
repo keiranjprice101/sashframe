@@ -1,0 +1,108 @@
+name: Publish ARM64 images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run application tests on ARM64
+        run: |
+          docker build --platform linux/arm64 -f docker/Dockerfile.tests -t sashframe-tests .
+          docker run --rm sashframe-tests
+      - name: Run Ansible configuration and deployment tests
+        run: |
+          python3 -m venv /tmp/ansible-tests
+          /tmp/ansible-tests/bin/pip install 'ansible-core>=2.15,<2.20'
+          export PATH="/tmp/ansible-tests/bin:$PATH"
+          ansible-galaxy collection install community.general
+          bash ansible/tests/run.sh
+
+  publish:
+    needs: test
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: sashframe-app
+            dockerfile: docker/Dockerfile.app
+          - image: sashframe-photo-processor
+            dockerfile: docker/Dockerfile.photos
+          - image: sashframe-calendar-sync
+            dockerfile: docker/Dockerfile.calendar
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Set image reference
+        env:
+          OWNER: ${{ github.repository_owner }}
+          IMAGE: ${{ matrix.image }}
+        run: echo "IMAGE_REF=ghcr.io/${OWNER,,}/${IMAGE}:sha-${GITHUB_SHA}" >> "$GITHUB_ENV"
+      - name: Build ARM64 image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          load: true
+          tags: ${{ env.IMAGE_REF }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-arm64
+      - name: Verify image architecture
+        run: test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE_REF")" = linux/arm64
+      - name: Smoke-test production app
+        if: matrix.image == 'sashframe-app'
+        run: python3 tests/smoke_calendar_container.py --runtime docker --image "$IMAGE_REF"
+      - name: Smoke-test HEIC processing
+        if: matrix.image == 'sashframe-photo-processor'
+        run: |
+          docker run --rm --entrypoint python3 "$IMAGE_REF" -c '
+          import tempfile
+          from pathlib import Path
+          from PIL import Image
+          from pillow_heif import from_pillow
+          from services.photos.process import run_batch_process
+          with tempfile.TemporaryDirectory() as directory:
+              root = Path(directory)
+              incoming = root / "incoming"
+              incoming.mkdir()
+              from_pillow(Image.new("RGB", (120, 80), "red")).save(incoming / "test.HEIC")
+              items = run_batch_process(incoming, root / "processed", root / "manifest.json", max_dimension=60)
+              assert len(items) == 1
+              with Image.open(root / "processed" / (items[0]["id"] + ".webp")) as result:
+                  assert result.format == "WEBP" and result.size == (60, 40)
+          '
+      - name: Smoke-test calendar worker
+        if: matrix.image == 'sashframe-calendar-sync'
+        run: |
+          docker run --rm --entrypoint python3 "$IMAGE_REF" -c 'from services.calendar.sync import valid_event; assert valid_event({"id":"test","start":{"date":"2026-01-01"},"end":{"date":"2026-01-02"}})'
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested image and verify registry manifest
+        run: |
+          docker push "$IMAGE_REF"
+          docker buildx imagetools inspect "$IMAGE_REF"
+          echo "Published ARM64 image: \`$IMAGE_REF\`" >> "$GITHUB_STEP_SUMMARY"

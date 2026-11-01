@@ -28,6 +28,12 @@ data/calendar
 *.env.*
 rclone.conf
 .config
+ansible/local.yml
+ansible/local.yaml
+ansible/local.yml.backup-*
+ansible/local.yaml.backup-*
+ansible/inventory.yml
+ansible/inventory.yaml
 
 # Temp / scratch
 scratch
