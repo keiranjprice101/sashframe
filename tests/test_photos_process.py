@@ -92,6 +92,30 @@ class BatchPhotoProcessorTests(unittest.TestCase):
         manifest = load_manifest(self.manifest_path)
         self.assertEqual(len(manifest), 3)
 
+    def test_heic_and_heif_decode_rotate_resize_and_reconcile(self) -> None:
+        from pillow_heif import from_pillow
+
+        for filename, color in (("iphone.HEIC", (30, 100, 180)), ("photo.heif", (180, 100, 30))):
+            image = Image.new("RGB", (120, 80), color=color)
+            exif = Image.Exif()
+            exif[274] = 6  # Rotate 90 degrees for display.
+            from_pillow(image).save(self.incoming_dir / filename, quality=90, exif=exif.tobytes())
+        (self.incoming_dir / "broken.heic").write_bytes(b"invalid HEIC")
+
+        items = run_batch_process(self.incoming_dir, self.processed_dir, self.manifest_path, max_dimension=60)
+        self.assertEqual({item["sourceName"] for item in items}, {"iphone.HEIC", "photo.heif"})
+        for item in items:
+            with Image.open(self.processed_dir / f"{item['id']}.webp") as output:
+                self.assertEqual(output.format, "WEBP")
+                self.assertEqual(output.size, (40, 60))
+                self.assertNotIn(274, output.getexif())
+        repeated = run_batch_process(self.incoming_dir, self.processed_dir, self.manifest_path, max_dimension=60)
+        self.assertEqual(items, repeated)
+        (self.incoming_dir / "iphone.HEIC").unlink()
+        remaining = run_batch_process(self.incoming_dir, self.processed_dir, self.manifest_path, max_dimension=60)
+        self.assertEqual([item["sourceName"] for item in remaining], ["photo.heif"])
+        self.assertEqual(len(list(self.processed_dir.glob("*.webp"))), 1)
+
     def test_corrupt_image_skipped_without_failing_batch(self) -> None:
         """Verify corrupt/invalid file is skipped with a warning while valid images succeed."""
         self._create_test_image("valid.jpg", size=(100, 100), color=(50, 50, 50))

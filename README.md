@@ -48,7 +48,7 @@ Raspberry Pi Host (Raspberry Pi OS Lite)
 
 ### Docker Responsibilities
 - **`sashframe-app`**: Production Astro standalone Node server running with `@astrojs/node` under `tini` as a non-root user (`node`). Exposes `GET /health` and binds to `127.0.0.1:4321`. Mounts `/var/lib/sashframe/photos` read-only (`:ro`).
-- **`sashframe-photo-processor`**: Python 3 batch image processing utility container (`Pillow`). Mounts `/var/lib/sashframe/photos` read-write (`:rw`) to validate images, apply EXIF orientation correction, resize without upscaling, convert to WebP, reconcile deleted sources, and atomically update `manifest.json`. Exits immediately upon completion.
+- **`sashframe-photo-processor`**: Python 3 batch image processing utility container (`Pillow` and `pillow-heif`). Mounts `/var/lib/sashframe/photos` read-write (`:rw`) to validate images, apply EXIF orientation correction, resize without upscaling, convert to WebP, reconcile deleted sources, and atomically update `manifest.json`. Exits immediately upon completion.
 - **`sashframe-calendar-sync`**: In Google mode, reads one shared calendar using the existing service account and publishes a local snapshot. Astro reads this snapshot without contacting Google, including during offline startup.
 
 ---
@@ -113,7 +113,7 @@ npm run dev
 ```
 
 - **Astro dev server**: http://localhost:4321
-- **Incoming photos**: Drop test `.jpg`/`.jpeg`/`.png`/`.webp` files into `data/photos/incoming/`
+- **Incoming photos**: Drop test `.jpg`/`.jpeg`/`.png`/`.webp`/`.heic`/`.heif` files into `data/photos/incoming/`
 - **Batch processing**: Run `npm run photos:process` to validate, rotate, resize, convert to WebP, and regenerate manifest
 - **Processed WebP**: Written to `data/photos/processed/`
 - **Manifest**: Automatically generated at `data/photos/manifest.json`

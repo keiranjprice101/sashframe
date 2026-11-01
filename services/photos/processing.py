@@ -10,15 +10,13 @@ import os
 from pathlib import Path
 from typing import Any, Optional, Tuple
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
+
+register_heif_opener()
 
 logger = logging.getLogger("photos.processing")
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-
-# TODO: Add .heic / .heif support using pillow-heif once system libraries are configured.
-# Example:
-#   import pillow_heif
-#   pillow_heif.register_heif_opener()
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
 
 
 def compute_file_hash(filepath: Path) -> str:
